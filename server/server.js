@@ -12,12 +12,14 @@ app.use(cors());
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
 
-// 2. Kết nối tới "Tủ lạnh" MongoDB của bạn
-// Mình đã thêm /onfa_data vào sau .net để tạo một ngăn chứa riêng tên là onfa_data
-const MONGO_URI = "mongodb+srv://onfa_admin:onfa_admin@onfa.tth2epb.mongodb.net/?appName=ONFA";
+// 2. Kết nối tới MongoDB với database onfa_test
+// Database: onfa_test, Collection: tickets
+const MONGO_URI = "mongodb+srv://onfa_admin:onfa_admin@onfa.tth2epb.mongodb.net/onfa_test?appName=ONFA";
 
-mongoose.connect(MONGO_URI)
-  .then(() => console.log("✅ Đã kết nối thành công tới MongoDB Cloud!"))
+mongoose.connect(MONGO_URI, {
+  dbName: 'onfa_test' // Explicitly specify database name
+})
+  .then(() => console.log("✅ Đã kết nối thành công tới MongoDB Cloud - Database: onfa_test"))
   .catch(err => console.error("❌ Lỗi kết nối MongoDB:", err));
 
 // 3. Tạo khuôn mẫu cho vé (Schema)
@@ -37,8 +39,8 @@ const Ticket = mongoose.model('Ticket', TicketSchema);
 
 // Cấu hình số lượng vé
 const TICKET_LIMITS = {
-  vvip: 50,
-  vip: 200
+  vvip: 5,
+  vip: 10
 };
 
 // --- CÁC ĐƯỜNG DẪN (API) ĐỂ FRONTEND GỌI ---
@@ -56,6 +58,8 @@ app.get('/api/stats', async (req, res) => {
       stats: {
         vvipCount,
         vipCount,
+        vvipLimit: TICKET_LIMITS.vvip,
+        vipLimit: TICKET_LIMITS.vip,
         vvipRemaining: Math.max(0, TICKET_LIMITS.vvip - vvipCount),
         vipRemaining: Math.max(0, TICKET_LIMITS.vip - vipCount),
         totalRegistered: tickets.length,
