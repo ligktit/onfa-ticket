@@ -182,7 +182,7 @@ const RegistrationForm = ({ onSuccess }) => {
         {/* Banner */}
         <div className="w-full h-full bg-gray-900 overflow-hidden">
           <img
-            src="/src/assets/banner.jpg"
+            src="/banner.jpg"
             alt="Banner"
             className="w-full h-full object-fill"
             onError={(e) => {
@@ -362,7 +362,7 @@ const RegistrationForm = ({ onSuccess }) => {
             <div className="flex flex-col md:flex-row gap-4 items-center justify-center">
               <div className="bg-white p-3 sm:p-4 rounded-lg border-2 border-yellow-400">
                 <img
-                  src="/src/assets/payment.jpg"
+                  src="/payment.jpg"
                   alt="QR Thanh toán"
                   className="w-40 h-40 sm:w-48 sm:h-48 object-contain"
                   onError={(e) => {
