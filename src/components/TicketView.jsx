@@ -6,6 +6,7 @@ import { getTierName } from "../utils/config";
 
 const TicketView = ({ ticket, onClose }) => {
   const ticketRef = useRef(null);
+  const qrCodeRef = useRef(null);
   const [qrSize, setQrSize] = useState(180);
 
   useEffect(() => {
@@ -28,33 +29,123 @@ const TicketView = ({ ticket, onClose }) => {
     if (!ticketRef.current) return;
 
     try {
-      // Đợi một chút để đảm bảo QR code canvas được render đầy đủ
-      await new Promise(resolve => setTimeout(resolve, 200));
+      // Lấy kích thước của vé
+      const rect = ticketRef.current.getBoundingClientRect();
+      const ticketWidth = rect.width;
+      const ticketHeight = rect.height;
 
+      // Đợi một chút để đảm bảo QR code canvas được render đầy đủ
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      // Capture vé thành canvas để convert QR code canvas thành image
       const canvas = await html2canvas(ticketRef.current, {
         backgroundColor: "#ffffff",
         scale: 2,
         logging: false,
         useCORS: true,
-        allowTaint: false,
-        // Đảm bảo capture cả canvas elements (QR code)
-        onclone: (clonedDoc) => {
-          // Tìm tất cả canvas elements và đảm bảo chúng được render
+        allowTaint: true,
+        onclone: (clonedDoc, element) => {
           const canvases = clonedDoc.querySelectorAll('canvas');
-          canvases.forEach(canvas => {
-            // Đảm bảo canvas có style display block
-            canvas.style.display = 'block';
+          canvases.forEach((canvasEl) => {
+            try {
+              const imageDataUrl = canvasEl.toDataURL('image/png');
+              const img = clonedDoc.createElement('img');
+              img.src = imageDataUrl;
+              img.width = canvasEl.width;
+              img.height = canvasEl.height;
+              img.style.width = canvasEl.width + 'px';
+              img.style.height = canvasEl.height + 'px';
+              img.style.display = 'block';
+              if (canvasEl.parentNode) {
+                canvasEl.parentNode.replaceChild(img, canvasEl);
+              }
+            } catch (err) {
+              console.error('Error converting canvas to image:', err);
+            }
           });
         },
       });
 
-      const link = document.createElement("a");
-      link.download = `ONFA_Ticket_${ticket.id}.png`;
-      link.href = canvas.toDataURL("image/png", 1.0);
-      link.click();
+      // Lấy image data URL từ canvas
+      const imageDataUrl = canvas.toDataURL("image/png", 1.0);
+
+      // Tạo HTML cho cửa sổ popup với kích thước chính xác bằng vé
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="UTF-8">
+            <title>ONFA Ticket - ${ticket.id}</title>
+            <style>
+              * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+              }
+              body {
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                min-height: 100vh;
+                background: #000;
+                padding: 20px;
+              }
+              .ticket-container {
+                max-width: 100%;
+                max-height: 100vh;
+              }
+              .ticket-image {
+                width: 100%;
+                height: auto;
+                display: block;
+                border-radius: 8px;
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+              }
+              .instructions {
+                color: #fff;
+                text-align: center;
+                margin-top: 15px;
+                font-family: Arial, sans-serif;
+                font-size: 14px;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="ticket-container">
+              <img src="${imageDataUrl}" alt="ONFA Ticket" class="ticket-image" />
+              <div class="instructions">
+                Nhấn Ctrl+S (Windows) hoặc Cmd+S (Mac) để lưu hình ảnh
+              </div>
+            </div>
+          </body>
+        </html>
+      `;
+
+      // Tạo blob URL từ HTML
+      const blob = new Blob([htmlContent], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+
+      // Mở cửa sổ popup với kích thước chính xác bằng vé + một chút padding cho UI
+      const popupWidth = Math.min(ticketWidth + 100, window.screen.width - 100);
+      const popupHeight = Math.min(ticketHeight + 150, window.screen.height - 100);
+      const left = (window.screen.width - popupWidth) / 2;
+      const top = (window.screen.height - popupHeight) / 2;
+
+      const popup = window.open(
+        url,
+        'ONFA_Ticket',
+        `width=${popupWidth},height=${popupHeight},left=${left},top=${top},resizable=yes,scrollbars=yes`
+      );
+
+      // Cleanup blob URL sau khi popup đóng
+      if (popup) {
+        popup.addEventListener('beforeunload', () => {
+          URL.revokeObjectURL(url);
+        });
+      }
     } catch (error) {
-      console.error("Lỗi khi lưu vé:", error);
-      alert("Không thể lưu vé. Vui lòng thử lại!");
+      console.error("Lỗi khi mở vé:", error);
+      alert("Không thể mở vé. Vui lòng thử lại!");
     }
   };
 
@@ -76,6 +167,7 @@ const TicketView = ({ ticket, onClose }) => {
             <div className="bg-white p-3 sm:p-4 rounded-lg inline-block border-2 border-gray-800">
               {/* Sử dụng Canvas cho việc capture tốt hơn */}
               <QRCodeCanvas
+                ref={qrCodeRef}
                 value={ticket.id}
                 size={qrSize}
                 level="H"
