@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 
 // Cấu hình URL Backend
-const API_URL = "http://localhost:5173/api";
+const API_URL = "http://localhost:5000/api";
 
 // Cấu hình hiển thị (Dùng để tham chiếu text)
 const TIER_CONFIG = {
