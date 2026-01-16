@@ -405,7 +405,7 @@ const RegistrationForm = ({ onSuccess }) => {
           <div>
             <label className="block text-gray-700 font-semibold mb-2">
               <Mail size={18} className="inline mr-2" />
-              Email <span className="text-red-500">*</span>
+              Email (Sử dụng tài khoản ONFA) <span className="text-red-500">*</span>
             </label>
             <input
               type="email"
@@ -492,6 +492,7 @@ const RegistrationForm = ({ onSuccess }) => {
                     e.target.parentElement.innerHTML = '<div class="w-40 h-40 sm:w-48 sm:h-48 bg-gray-200 flex items-center justify-center text-gray-500 text-xs sm:text-sm text-center px-2">QR Code<br/>Thanh toán</div>';
                   }}
                 />
+                <p className="text-xs sm:text-sm text-gray-700 text-center">0x229cd689abca9543f312bdceae42b367edf691b7</p>
               </div>
               <div className="text-xs sm:text-sm text-gray-700 space-y-2 max-w-md">
                 <p className="font-semibold">Hướng dẫn thanh toán:</p>

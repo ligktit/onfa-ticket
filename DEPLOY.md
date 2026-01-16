@@ -74,7 +74,7 @@ git push -u origin main
    
    | Key | Value | Mô tả | Môi trường |
    |-----|-------|-------|------------|
-   | `MONGO_URI` | `mongodb+srv://onfa_admin:onfa_admin@onfa.tth2epb.mongodb.net/onfa_test?appName=ONFA` | MongoDB connection string | Production, Preview, Development |
+   | `MONGO_URI` | `mongodb+srv://onfa_admin:onfa_admin@onfa.tth2epb.mongodb.net/onfa_events?appName=ONFA` | MongoDB connection string | Production, Preview, Development |
    | `VVIP_LIMIT` | `5` | Số lượng vé VIP A | Production, Preview, Development |
    | `VIP_LIMIT` | `10` | Số lượng vé VIP B | Production, Preview, Development |
    | `VITE_API_URL` | (để trống) | API URL (tự động dùng `/api` trên Vercel) | Production, Preview, Development |
@@ -132,7 +132,7 @@ git push -u origin main
 
 ### 3.2. Kiểm tra Database Connection
 
-- Database: `onfa_test`
+- Database: `onfa_events`
 - Collection: `tickets`
 - Connection string đã được cấu hình trong `MONGO_URI`
 
