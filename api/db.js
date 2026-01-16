@@ -45,6 +45,7 @@ const TicketSchema = new mongoose.Schema({
   dob: String,
   tier: String,
   paymentImage: String,
+  qrCodeDataURL: String, // QR code image (Base64 Data URL)
   status: { type: String, default: 'PENDING' },
   registeredAt: { type: Date, default: Date.now }
 });

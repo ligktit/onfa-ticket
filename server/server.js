@@ -7,8 +7,17 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const nodemailer = require('nodemailer');
 const QRCode = require('qrcode');
+const http = require('http');
+const { Server } = require('socket.io');
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: "*", // Allow all origins in development, restrict in production
+    methods: ["GET", "POST"]
+  }
+});
 const PORT = 5000;
 
 // 1. Cấu hình để Frontend nói chuyện được với Backend
@@ -19,10 +28,10 @@ app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
 
 // 2. Kết nối tới MongoDB với database onfa_test
 // Database: onfa_test, Collection: tickets
-const MONGO_URI = "mongodb+srv://onfa_admin:onfa_admin@onfa.tth2epb.mongodb.net/onfa_test?appName=ONFA";
+const MONGO_URI = "mongodb+srv://onfa_admin:onfa_admin@onfa.tth2epb.mongodb.net/onfa_events?appName=ONFA";
 
 mongoose.connect(MONGO_URI, {
-  dbName: 'onfa_test' // Explicitly specify database name
+  dbName: 'onfa_events' // Explicitly specify database name
 })
   .then(() => console.log("✅ Đã kết nối thành công tới MongoDB Cloud - Database: onfa_test"))
   .catch(err => console.error("❌ Lỗi kết nối MongoDB:", err));
@@ -36,6 +45,7 @@ const TicketSchema = new mongoose.Schema({
   dob: String,         // Ngày sinh
   tier: String,        // Hạng vé
   paymentImage: String,// Ảnh thanh toán (Base64)
+  qrCodeDataURL: String, // QR code image (Base64 Data URL)
   status: { type: String, default: 'PENDING' },
   registeredAt: { type: Date, default: Date.now }
 });
@@ -62,8 +72,8 @@ const SMTP_CONFIG = {
 // Tạo transporter cho nodemailer
 const transporter = nodemailer.createTransport(SMTP_CONFIG);
 
-// Hàm gửi email vé với QR code
-const sendTicketEmail = async (ticket) => {
+// Hàm tạo và lưu QR code vào database
+const generateAndSaveQRCode = async (ticket) => {
   try {
     // Tạo QR code từ ticket ID
     const qrCodeDataURL = await QRCode.toDataURL(ticket.id, {
@@ -72,6 +82,29 @@ const sendTicketEmail = async (ticket) => {
       width: 300,
       margin: 1
     });
+    
+    // Lưu QR code vào database
+    ticket.qrCodeDataURL = qrCodeDataURL;
+    await ticket.save();
+    
+    console.log(`✅ Đã tạo và lưu QR code cho ticket ${ticket.id}`);
+    return qrCodeDataURL;
+  } catch (error) {
+    console.error(`❌ Lỗi tạo QR code cho ticket ${ticket.id}:`, error);
+    throw error;
+  }
+};
+
+// Hàm gửi email vé với QR code
+const sendTicketEmail = async (ticket) => {
+  try {
+    // Lấy QR code từ database hoặc tạo mới nếu chưa có
+    let qrCodeDataURL = ticket.qrCodeDataURL;
+    
+    if (!qrCodeDataURL) {
+      // Nếu chưa có QR code, tạo và lưu vào database
+      qrCodeDataURL = await generateAndSaveQRCode(ticket);
+    }
 
     // Tạo HTML email với QR code
     const tierName = ticket.tier === 'vvip' ? 'VIP A' : 'VIP B';
@@ -202,13 +235,24 @@ const sendTicketEmail = async (ticket) => {
 
 // API 1: Lấy thống kê vé
 app.get('/api/stats', async (req, res) => {
+  const startTime = Date.now();
   try {
+    console.log('📊 /api/stats called');
+    console.log(`📊 MongoDB Connection State: ${mongoose.connection.readyState}`);
+    
+    // Set CORS headers
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    
     const tickets = await Ticket.find(); // Lấy hết vé trong kho ra đếm
+    console.log(`📊 Found ${tickets.length} tickets`);
+    
     const vvipCount = tickets.filter(t => t.tier === 'vvip').length;
     const vipCount = tickets.filter(t => t.tier === 'vip').length;
     const checkedInCount = tickets.filter(t => t.status === 'CHECKED_IN').length;
 
-    res.json({
+    const response = {
       tickets: tickets,
       stats: {
         vvipCount,
@@ -220,8 +264,15 @@ app.get('/api/stats', async (req, res) => {
         totalRegistered: tickets.length,
         totalCheckedIn: checkedInCount
       }
-    });
+    };
+    
+    const duration = Date.now() - startTime;
+    console.log(`📊 Response sent in ${duration}ms`);
+    
+    res.json(response);
   } catch (error) {
+    const duration = Date.now() - startTime;
+    console.error(`❌ Error in /api/stats after ${duration}ms:`, error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -269,6 +320,20 @@ app.post('/api/checkin', async (req, res) => {
 
     ticket.status = 'CHECKED_IN';
     await ticket.save();
+    
+    // Emit Socket.IO event to notify all connected admin clients
+    io.emit('ticket-checked-in', {
+      ticketId: ticket.id,
+      name: ticket.name,
+      email: ticket.email,
+      phone: ticket.phone,
+      dob: ticket.dob,
+      tier: ticket.tier,
+      paymentImage: ticket.paymentImage,
+      status: ticket.status,
+      checkedInAt: new Date()
+    });
+    
     res.json(ticket);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -289,9 +354,15 @@ app.post('/api/update-status', async (req, res) => {
     ticket.status = status;
     await ticket.save();
 
-    // Nếu status là PAID, gửi email vé tới client
+    // Nếu status là PAID, tạo QR code và gửi email vé tới client
     if (status === 'PAID') {
       try {
+        // Đảm bảo QR code đã được tạo và lưu vào database
+        if (!ticket.qrCodeDataURL) {
+          await generateAndSaveQRCode(ticket);
+        }
+        
+        // Gửi email với QR code đã lưu
         await sendTicketEmail(ticket);
         console.log(`✅ Đã gửi email vé cho ticket ${ticketId}`);
       } catch (emailError) {
@@ -306,7 +377,18 @@ app.post('/api/update-status', async (req, res) => {
   }
 });
 
-// Khởi động server
-app.listen(PORT, () => {
+// Socket.IO connection handling
+io.on('connection', (socket) => {
+  console.log(`✅ Admin client connected: ${socket.id}`);
+  
+  socket.on('disconnect', () => {
+    console.log(`❌ Admin client disconnected: ${socket.id}`);
+  });
+});
+
+// Khởi động server - Listen on all network interfaces (0.0.0.0) to allow phone access
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server đang chạy tại: http://localhost:${PORT}`);
+  console.log(`📡 Socket.IO server đã sẵn sàng`);
+  console.log(`🌐 Network access: http://[your-ip]:${PORT}`);
 });

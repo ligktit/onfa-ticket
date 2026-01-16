@@ -1,6 +1,34 @@
 // Cấu hình URL Backend
-// Sử dụng environment variable hoặc fallback về localhost cho development
-const API_URL = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? "http://localhost:5000/api" : "/api");
+// Auto-detect network IP when accessed from phone, otherwise use localhost
+function getApiUrl() {
+  // If environment variable is set, use it
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  
+  // In production, use relative URL
+  if (!import.meta.env.DEV) {
+    return "/api";
+  }
+  
+  // In dev mode: if accessing from network IP (phone), use network IP for API
+  const hostname = window.location.hostname;
+  if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+    // Accessed from network IP (phone) - use same IP for backend
+    return `http://${hostname}:5000/api`;
+  }
+  
+  // Accessed from localhost (computer) - use localhost
+  return "http://localhost:5000/api";
+}
+
+const API_URL = getApiUrl();
+
+// Debug: Log API URL for troubleshooting
+if (import.meta.env.DEV) {
+  console.log(`🔗 API URL: ${API_URL}`);
+  console.log(`📍 Hostname: ${window.location.hostname}`);
+}
 
 // Helper function để kiểm tra lỗi kết nối
 const isConnectionError = (error) => {
@@ -14,29 +42,65 @@ const isConnectionError = (error) => {
 };
 
 // Helper function để tạo timeout cho fetch
-const fetchWithTimeout = (url, options = {}, timeout = 10000) => {
+const fetchWithTimeout = (url, options = {}, timeout = 30000) => {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeout);
+  const timeoutId = setTimeout(() => {
+    console.warn(`⏱️ Request timeout after ${timeout}ms: ${url}`);
+    controller.abort();
+  }, timeout);
   
   return fetch(url, {
     ...options,
     signal: controller.signal,
-  }).finally(() => {
-    clearTimeout(timeoutId);
-  });
+  })
+    .then(response => {
+      clearTimeout(timeoutId);
+      return response;
+    })
+    .catch(error => {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        throw new Error(`Request timeout: Server không phản hồi sau ${timeout/1000} giây`);
+      }
+      throw error;
+    });
 };
 
 // API Service
 export const BackendAPI = {
   fetchData: async () => {
     try {
-      const response = await fetchWithTimeout(`${API_URL}/stats`, {}, 10000);
+      console.log(`🔗 Fetching from: ${API_URL}/stats`);
+      const startTime = Date.now();
+      
+      const response = await fetchWithTimeout(`${API_URL}/stats`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }, 30000); // 30 second timeout
+      
+      const duration = Date.now() - startTime;
+      console.log(`⏱️ Request completed in ${duration}ms`);
+      
       if (!response.ok) {
-        throw new Error("Lỗi kết nối server");
+        const errorText = await response.text().catch(() => 'Unknown error');
+        console.error(`❌ Response not OK. Status: ${response.status}, Body:`, errorText);
+        throw new Error(`Lỗi kết nối server: ${response.status} ${response.statusText}`);
       }
-      return await response.json();
+      
+      const data = await response.json();
+      console.log(`✅ Response received:`, { 
+        tickets: data.tickets?.length || 0, 
+        stats: data.stats 
+      });
+      return data;
     } catch (error) {
-      console.error("Lỗi fetchData:", error);
+      console.error("❌ Lỗi fetchData:", error);
+      console.error("❌ Error details:", {
+        name: error.name,
+        message: error.message
+      });
       if (isConnectionError(error)) {
         throw new Error("Không thể kết nối đến Server. Vui lòng thử lại sau");
       }
