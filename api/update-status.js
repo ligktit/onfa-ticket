@@ -1,7 +1,6 @@
 import { connectDB, Ticket } from './db.js';
 import nodemailer from 'nodemailer';
 import QRCode from 'qrcode';
-import nodemailer from 'nodemailer';
 import axios from 'axios';
 
 // Hàm tạo QR code từ Ticket ID (không lưu vào database vì có thể tạo lại bất cứ lúc nào)
@@ -179,7 +178,7 @@ async function notifyStatusChange(ticket, action = 'append') {
         email: ticket.email,
         phone: ticket.phone,
         dob: ticket.dob,
-        tier: ticket.tier === 'vvip' ? 'VIP A' : 'VIP B',
+        tier: ticket.tier === 'supervip' ? 'Super VIP' : ticket.tier === 'vvip' ? 'VIP A' : 'VIP B',
         status: ticket.status, // Only send current status
         registeredAt: ticket.registeredAt ? new Date(ticket.registeredAt).toISOString() : null,
         statusChangedAt: new Date().toISOString(),
@@ -225,17 +224,33 @@ export default async function handler(req, res) {
       body = JSON.parse(body);
     }
     
-    const { ticketId, status } = body;
+    const { ticketId, status, tier } = body;
+    
+    // Build update object
+    const updateData = {};
+    if (status) updateData.status = status;
+    if (tier) updateData.tier = tier;
     
     // Optimized: Find and update in one operation
     const ticket = await Ticket.findOneAndUpdate(
       { id: ticketId },
-      { status },
+      updateData,
       { new: true }
     );
 
     if (!ticket) {
       return res.status(404).json({ message: 'Vé không tồn tại!' });
+    }
+
+    // Send webhook to n8n for status change logging (only if status changed)
+    if (status) {
+      try {
+        const action = status === 'CHECKED_IN' ? 'update' : 'append';
+        await notifyStatusChange(ticket, action);
+      } catch (webhookError) {
+        console.error('❌ Error sending webhook to n8n:', webhookError);
+        // Don't fail the request if webhook fails
+      }
     }
 
     // Nếu status là PAID, tạo QR code và gửi email
@@ -250,11 +265,16 @@ export default async function handler(req, res) {
           return res.json({ success: true });
         }
         
-        // Gửi email (hàm sendTicketEmail sẽ tự check và tạo QR code nếu chưa có)
-        await sendTicketEmail(updatedTicket);
-        console.log(`✅ Đã gửi email vé cho ticket ${ticketId} (QR code sẽ được tạo tự động nếu chưa có)`);
-      } catch (error) {
-        console.error(`❌ Lỗi gửi email cho ticket ${ticketId}:`, error);
+        // Check if SMTP credentials are available before attempting to send email
+        if (SMTP_CONFIG.auth.user && SMTP_CONFIG.auth.pass) {
+          // Gửi email (hàm sendTicketEmail sẽ tự check và tạo QR code nếu chưa có)
+          await sendTicketEmail(updatedTicket);
+          console.log(`✅ Đã gửi email vé cho ticket ${ticketId}`);
+        } else {
+          console.warn(`⚠️ SMTP credentials not configured, skipping email for ticket ${ticketId}`);
+        }
+      } catch (emailError) {
+        console.error(`❌ Lỗi gửi email cho ticket ${ticketId}:`, emailError.message || emailError);
         // Không throw error để không làm gián đoạn việc cập nhật status
         // Email sẽ được gửi lại khi admin cập nhật lại status
       }
@@ -262,7 +282,16 @@ export default async function handler(req, res) {
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Error in /api/update-status:', error);
-    res.status(500).json({ message: error.message || 'Internal server error' });
+    console.error('❌ Error in /api/update-status:', error);
+    console.error('❌ Error stack:', error.stack);
+    console.error('❌ Error details:', {
+      name: error.name,
+      message: error.message,
+      body: req.body
+    });
+    res.status(500).json({ 
+      message: error.message || 'Internal server error',
+      error: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 }

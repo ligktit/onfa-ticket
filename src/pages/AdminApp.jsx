@@ -32,11 +32,13 @@ const AdminApp = () => {
   const [connectionError, setConnectionError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [isScanning, setIsScanning] = useState(false);
+  const [isApplyingStatus, setIsApplyingStatus] = useState(false); // Loading state for applying status changes
   const [selectedImage, setSelectedImage] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("ALL"); // ALL, PENDING, PAID, CHECKED_IN, CANCELLED
   const [pendingStatusChanges, setPendingStatusChanges] = useState({}); // Track pending status changes: { ticketId: newStatus }
-  const [filterTier, setFilterTier] = useState("ALL"); // ALL, vvip, vip
+  const [pendingTierChanges, setPendingTierChanges] = useState({}); // Track pending tier changes: { ticketId: newTier }
+  const [filterTier, setFilterTier] = useState("ALL"); // ALL, supervip, vvip, vip
   const [notificationTicket, setNotificationTicket] = useState(null); // For Socket.IO notifications
   const qrCodeRef = useRef(null);
   const html5QrCodeRef = useRef(null);
@@ -555,6 +557,17 @@ const AdminApp = () => {
       delete updated[ticketId];
       return updated;
     });
+    // Note: loadData is called by handleApplyChanges, so we don't call it here
+  };
+
+  const handleTierChange = async (ticketId, newTier) => {
+    await BackendAPI.updateTicketTier(ticketId, newTier);
+    // Clear pending tier change for this ticket
+    setPendingTierChanges(prev => {
+      const updated = { ...prev };
+      delete updated[ticketId];
+      return updated;
+    });
     loadData(false); // Refresh không hiển thị loading overlay
   };
 
@@ -566,12 +579,86 @@ const AdminApp = () => {
     }));
   };
 
-  const handleApplyStatusChange = async (ticketId) => {
+  const handleTierSelectChange = (ticketId, newTier) => {
+    // Store the pending tier change
+    setPendingTierChanges(prev => ({
+      ...prev,
+      [ticketId]: newTier
+    }));
+  };
+
+  const handleApplyChanges = async (ticketId) => {
     const newStatus = pendingStatusChanges[ticketId];
-    if (newStatus) {
-      await handleStatusChange(ticketId, newStatus);
+    const newTier = pendingTierChanges[ticketId];
+    
+    if (newStatus || newTier) {
+      setIsApplyingStatus(true);
+      try {
+        // If both status and tier are changing, update both in one API call
+        if (newStatus && newTier) {
+          await BackendAPI.updateTicketStatusAndTier(ticketId, newStatus, newTier);
+          // Clear both pending changes
+          setPendingStatusChanges(prev => {
+            const updated = { ...prev };
+            delete updated[ticketId];
+            return updated;
+          });
+          setPendingTierChanges(prev => {
+            const updated = { ...prev };
+            delete updated[ticketId];
+            return updated;
+          });
+        } else if (newStatus) {
+          // Only status change
+          await BackendAPI.updateTicketStatus(ticketId, newStatus);
+          // Clear pending status change
+          setPendingStatusChanges(prev => {
+            const updated = { ...prev };
+            delete updated[ticketId];
+            return updated;
+          });
+        } else if (newTier) {
+          // Only tier change
+          await BackendAPI.updateTicketTier(ticketId, newTier);
+          // Clear pending tier change
+          setPendingTierChanges(prev => {
+            const updated = { ...prev };
+            delete updated[ticketId];
+            return updated;
+          });
+        }
+        // Refresh data once after all updates
+        loadData(false);
+      } catch (error) {
+        console.error('Error applying changes:', error);
+        setError('Không thể cập nhật. Vui lòng thử lại.');
+      } finally {
+        setIsApplyingStatus(false);
+      }
     }
   };
+
+  // Loading overlay component for applying status changes
+  const ApplyingStatusOverlay = () => (
+    <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center">
+      <div className="bg-gradient-to-br from-gray-800 via-gray-800 to-gray-900 rounded-2xl sm:rounded-3xl p-8 sm:p-10 max-w-md mx-4 border-2 border-yellow-400 shadow-2xl shadow-yellow-500/20">
+        <div className="flex flex-col items-center">
+          <div className="relative mb-6">
+            <Loader2 className="w-16 h-16 text-yellow-500 animate-spin" />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-8 h-8 bg-yellow-100 rounded-full"></div>
+            </div>
+          </div>
+          <h3 className="text-xl sm:text-2xl font-bold text-yellow-400 mb-2">
+            Đang Áp Dụng Thay Đổi
+          </h3>
+          <p className="text-sm sm:text-base text-gray-300 text-center">
+            Xin Chờ Trong Phút Lát
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 
   // Loading overlay component
   const LoadingOverlay = () => (
@@ -602,6 +689,7 @@ const AdminApp = () => {
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 font-sans relative">
       {/* Loading Overlay */}
       {isLoading && <LoadingOverlay />}
+      {isApplyingStatus && <ApplyingStatusOverlay />}
       
       <div className={`container mx-auto px-4 sm:px-6 max-w-[1400px] py-4 sm:py-6 md:py-8 transition-all duration-300 ${
         isLoading ? 'opacity-30 pointer-events-none' : 'opacity-100'
@@ -957,17 +1045,23 @@ const AdminApp = () => {
                             <div className="text-xs text-gray-400 mt-1">{t.dob}</div>
                           </td>
                           <td className="p-3 sm:p-4">
-                            <span
-                              className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-bold shadow-lg ${
-                                t.tier === "supervip"
-                                  ? "bg-gradient-to-r from-yellow-600 to-yellow-700 text-white"
-                                  : t.tier === "vvip"
-                                  ? "bg-gradient-to-r from-yellow-500 to-yellow-600 text-black"
-                                  : "bg-gradient-to-r from-yellow-400 to-yellow-500 text-black"
-                              }`}
+                            <select
+                              value={pendingTierChanges[t.id] || t.tier}
+                              onChange={(e) =>
+                                handleTierSelectChange(t.id, e.target.value)
+                              }
+                              className="bg-gray-700/80 backdrop-blur-sm text-white text-xs sm:text-sm rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 border-2 border-yellow-400/50 focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 transition-all shadow-lg hover:border-yellow-400 w-full"
                             >
-                              {getTierName(t.tier)}
-                            </span>
+                              <option value="supervip" className="text-white bg-gray-800">
+                                Vé Super VIP
+                              </option>
+                              <option value="vvip" className="text-white bg-gray-800">
+                                Vé VIP
+                              </option>
+                              <option value="vip" className="text-white bg-gray-800">
+                                Vé Superior
+                              </option>
+                            </select>
                           </td>
                           <td className="p-3 sm:p-4">
                             {t.paymentImage ? (
@@ -991,26 +1085,39 @@ const AdminApp = () => {
                             )}
                           </td>
                           <td className="p-3 sm:p-4">
-                            <select
-                              value={t.status}
-                              onChange={(e) =>
-                                handleStatusChange(t.id, e.target.value)
-                              }
-                              className="bg-gray-700/80 backdrop-blur-sm text-white text-xs sm:text-sm rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 border-2 border-yellow-400/50 focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 transition-all shadow-lg hover:border-yellow-400"
-                            >
-                              <option value="PENDING" className="text-white bg-gray-800">
-                                Chờ CK
-                              </option>
-                              <option value="PAID" className="text-white bg-gray-800">
-                                Đã thanh toán
-                              </option>
-                              <option value="CHECKED_IN" className="text-white bg-gray-800">
-                                Đã vào
-                              </option>
-                              <option value="CANCELLED" className="text-white bg-gray-800">
-                                Hủy
-                              </option>
-                            </select>
+                            <div className="flex items-center gap-2">
+                              <select
+                                value={pendingStatusChanges[t.id] || t.status}
+                                onChange={(e) =>
+                                  handleStatusSelectChange(t.id, e.target.value)
+                                }
+                                className="bg-gray-700/80 backdrop-blur-sm text-white text-xs sm:text-sm rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 border-2 border-yellow-400/50 focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 transition-all shadow-lg hover:border-yellow-400 flex-1"
+                              >
+                                <option value="PENDING" className="text-white bg-gray-800">
+                                  Chờ CK
+                                </option>
+                                <option value="PAID" className="text-white bg-gray-800">
+                                  Đã thanh toán
+                                </option>
+                                <option value="CHECKED_IN" className="text-white bg-gray-800">
+                                  Đã vào
+                                </option>
+                                <option value="CANCELLED" className="text-white bg-gray-800">
+                                  Hủy
+                                </option>
+                              </select>
+                              {((pendingStatusChanges[t.id] && pendingStatusChanges[t.id] !== t.status) || 
+                                (pendingTierChanges[t.id] && pendingTierChanges[t.id] !== t.tier)) && (
+                                <button
+                                  onClick={() => handleApplyChanges(t.id)}
+                                  disabled={isApplyingStatus}
+                                  className="px-3 sm:px-4 py-1.5 sm:py-2 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-gray-900 text-xs sm:text-sm font-semibold rounded-lg border-2 border-yellow-500 transition-all shadow-lg hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                                  title="Áp dụng thay đổi"
+                                >
+                                  Áp Dụng
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))
