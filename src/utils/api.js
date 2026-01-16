@@ -162,6 +162,7 @@ export const BackendAPI = {
     }
   },
 
+
   updateTicketStatus: async (ticketId, newStatus) => {
     try {
       const response = await fetchWithTimeout(

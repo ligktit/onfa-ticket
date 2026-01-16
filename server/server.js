@@ -7,7 +7,10 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const nodemailer = require('nodemailer');
 const QRCode = require('qrcode');
-const { TICKET_LIMITS } = require('../ticket-limits.cjs');
+const http = require('http');
+const { Server } = require('socket.io');
+const compression = require('compression');
+const n8nWebhookService = require('./n8nWebhookService');
 
 const app = express();
 const server = http.createServer(app);
@@ -20,6 +23,7 @@ const io = new Server(server, {
 const PORT = 5000;
 
 // 1. Cấu hình để Frontend nói chuyện được với Backend
+app.use(compression()); // Compress responses to reduce size
 app.use(cors());
 // Cấu hình để nhận được ảnh upload (tăng giới hạn dung lượng lên 10MB)
 app.use(bodyParser.json({ limit: '10mb' }));
@@ -50,6 +54,12 @@ const TicketSchema = new mongoose.Schema({
 });
 
 const Ticket = mongoose.model('Ticket', TicketSchema);
+
+// Cấu hình số lượng vé
+const TICKET_LIMITS = {
+  vvip: 5,
+  vip: 10
+};
 
 // Cấu hình SMTP Email (có thể thay đổi bằng environment variables)
 const SMTP_CONFIG = {
@@ -347,6 +357,9 @@ app.post('/api/checkin', async (req, res) => {
     ticket.status = 'CHECKED_IN';
     await ticket.save();
     
+    // Send webhook to n8n to UPDATE existing row (not append)
+    await n8nWebhookService.notifyStatusChange(ticket, 'update');
+    
     // Emit Socket.IO event to notify all connected admin clients
     io.emit('ticket-checked-in', {
       ticketId: ticket.id,
@@ -391,10 +404,15 @@ app.post('/api/update-status', async (req, res) => {
     if (!ticket) {
       return res.status(404).json({ message: 'Vé không tồn tại!' });
     }
-
+    
     // Cập nhật status
     ticket.status = status;
     await ticket.save();
+
+    // Send webhook to n8n for status change logging
+    // If PAID: append new row, if CHECKED_IN: update existing row
+    const action = status === 'CHECKED_IN' ? 'update' : 'append';
+    await n8nWebhookService.notifyStatusChange(ticket, action);
 
     // Nếu status là PAID, tạo QR code và gửi email vé tới client
     if (status === 'PAID') {
@@ -418,6 +436,7 @@ app.post('/api/update-status', async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 });
+
 
 // Socket.IO connection handling
 io.on('connection', (socket) => {
