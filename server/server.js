@@ -19,7 +19,7 @@ app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
 
 // 2. Kết nối tới MongoDB với database onfa_test
 // Database: onfa_test, Collection: tickets
-const MONGO_URI = "mongodb+srv://onfa_admin:onfa_admin@onfa.tth2epb.mongodb.net/onfa_test?appName=ONFA";
+const MONGO_URI = "mongodb+srv://onfa_admin:onfa_admin@onfa.tth2epb.mongodb.net/onfa_events?appName=ONFA";
 
 mongoose.connect(MONGO_URI, {
   dbName: 'onfa_test' // Explicitly specify database name

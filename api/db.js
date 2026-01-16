@@ -1,7 +1,7 @@
 // Database connection helper cho Vercel Serverless Functions
 import mongoose from 'mongoose';
 
-const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://onfa_admin:onfa_admin@onfa.tth2epb.mongodb.net/onfa_test?appName=ONFA";
+const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://onfa_admin:onfa_admin@onfa.tth2epb.mongodb.net/onfa_events?appName=ONFA";
 
 let cached = global.mongoose;
 
@@ -17,11 +17,11 @@ async function connectDB() {
   if (!cached.promise) {
     const opts = {
       bufferCommands: false,
-      dbName: 'onfa_test'
+      dbName: 'onfa_events'
     };
 
     cached.promise = mongoose.connect(MONGO_URI, opts).then((mongoose) => {
-      console.log("✅ Đã kết nối thành công tới MongoDB Cloud - Database: onfa_test");
+      console.log("✅ Đã kết nối thành công tới MongoDB Cloud - Database: onfa_events");
       return mongoose;
     });
   }
