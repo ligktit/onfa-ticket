@@ -103,7 +103,8 @@ const sendTicketEmail = async (ticket) => {
     const qrCodeDataURL = await generateQRCode(ticket.id);
 
     // Tạo HTML email với QR code
-    const tierName = ticket.tier === 'supervip' ? 'Super VIP' : ticket.tier === 'vvip' ? 'VIP A' : 'VIP B';
+    // Tên vé theo config: supervip = "Vé Super VIP", vvip = "Vé VIP", vip = "Vé Superior"
+    const tierName = ticket.tier === 'supervip' ? 'Vé Super VIP' : ticket.tier === 'vvip' ? 'Vé VIP' : 'Vé Superior';
     const qrCodeCid = `qr-${ticket.id}@onfa`;
     const emailHTML = `
       <!DOCTYPE html>
@@ -227,8 +228,6 @@ const sendTicketEmail = async (ticket) => {
     return false;
   }
 };
-
-// --- CÁC ĐƯỜNG DẪN (API) ĐỂ FRONTEND GỌI ---
 
 // API 1: Lấy thống kê vé
 app.get('/api/stats', async (req, res) => {

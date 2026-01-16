@@ -41,7 +41,8 @@ const sendTicketEmail = async (ticket) => {
   // QR code được tạo từ ticket.id, khi scan sẽ decode ra chính ticket.id
   const qrCodeDataURL = await generateQRCode(ticket.id);
 
-  const tierName = ticket.tier === 'supervip' ? 'Super VIP' : ticket.tier === 'vvip' ? 'VIP A' : 'VIP B';
+  // Tên vé theo config: supervip = "Vé Super VIP", vvip = "Vé VIP", vip = "Vé Superior"
+  const tierName = ticket.tier === 'supervip' ? 'Vé Super VIP' : ticket.tier === 'vvip' ? 'Vé VIP' : 'Vé Superior';
   const emailHTML = `
     <!DOCTYPE html>
     <html>
@@ -176,7 +177,7 @@ async function notifyStatusChange(ticket, action = 'append') {
         email: ticket.email,
         phone: ticket.phone,
         dob: ticket.dob,
-        tier: ticket.tier === 'supervip' ? 'Super VIP' : ticket.tier === 'vvip' ? 'VIP A' : 'VIP B',
+        tier: ticket.tier === 'supervip' ? 'Vé Super VIP' : ticket.tier === 'vvip' ? 'Vé VIP' : 'Vé Superior',
         status: ticket.status, // Only send current status
         registeredAt: ticket.registeredAt ? new Date(ticket.registeredAt).toISOString() : null,
         statusChangedAt: new Date().toISOString(),

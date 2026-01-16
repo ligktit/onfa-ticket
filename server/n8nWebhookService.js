@@ -45,7 +45,7 @@ class N8nWebhookService {
         email: ticket.email,
         phone: ticket.phone,
         dob: ticket.dob,
-        tier: ticket.tier === 'supervip' ? 'Super VIP' : ticket.tier === 'vvip' ? 'VIP A' : 'VIP B',
+        tier: ticket.tier === 'supervip' ? 'Vé Super VIP' : ticket.tier === 'vvip' ? 'Vé VIP' : 'Vé Superior',
         status: ticket.status,
         registeredAt: ticket.registeredAt ? new Date(ticket.registeredAt).toISOString() : null,
         statusChangedAt: new Date().toISOString(),
