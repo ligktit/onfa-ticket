@@ -7,6 +7,7 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const nodemailer = require('nodemailer');
 const QRCode = require('qrcode');
+const { TICKET_LIMITS } = require('../ticket-limits.cjs');
 
 const app = express();
 const PORT = 5000;
@@ -17,14 +18,14 @@ app.use(cors());
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
 
-// 2. Kết nối tới MongoDB với database onfa_test
-// Database: onfa_test, Collection: tickets
+// 2. Kết nối tới MongoDB với database onfa_events
+// Database: onfa_events, Collection: tickets
 const MONGO_URI = "mongodb+srv://onfa_admin:onfa_admin@onfa.tth2epb.mongodb.net/onfa_events?appName=ONFA";
 
 mongoose.connect(MONGO_URI, {
-  dbName: 'onfa_test' // Explicitly specify database name
+  dbName: 'onfa_events' // Explicitly specify database name
 })
-  .then(() => console.log("✅ Đã kết nối thành công tới MongoDB Cloud - Database: onfa_test"))
+  .then(() => console.log("✅ Đã kết nối thành công tới MongoDB Cloud - Database: onfa_events"))
   .catch(err => console.error("❌ Lỗi kết nối MongoDB:", err));
 
 // 3. Tạo khuôn mẫu cho vé (Schema)
@@ -41,12 +42,6 @@ const TicketSchema = new mongoose.Schema({
 });
 
 const Ticket = mongoose.model('Ticket', TicketSchema);
-
-// Cấu hình số lượng vé
-const TICKET_LIMITS = {
-  vvip: 5,
-  vip: 10
-};
 
 // Cấu hình SMTP Email (có thể thay đổi bằng environment variables)
 const SMTP_CONFIG = {
@@ -75,6 +70,7 @@ const sendTicketEmail = async (ticket) => {
 
     // Tạo HTML email với QR code
     const tierName = ticket.tier === 'vvip' ? 'VIP A' : 'VIP B';
+    const qrCodeCid = `qr-${ticket.id}@onfa`;
     const emailHTML = `
       <!DOCTYPE html>
       <html>
@@ -154,7 +150,7 @@ const sendTicketEmail = async (ticket) => {
 
             <div class="qr-code">
               <p style="font-weight: bold; margin-bottom: 10px;">Mã QR Code của vé:</p>
-              <img src="${qrCodeDataURL}" alt="QR Code" />
+              <img src="cid:${qrCodeCid}" alt="QR Code" />
               <p style="margin-top: 10px; font-size: 14px; color: #666;">
                 Vui lòng trình mã QR này khi check-in tại sự kiện
               </p>
@@ -184,7 +180,9 @@ const sendTicketEmail = async (ticket) => {
         {
           filename: `QR_${ticket.id}.png`,
           content: qrCodeDataURL.split('base64,')[1],
-          encoding: 'base64'
+          encoding: 'base64',
+          cid: qrCodeCid,
+          contentDisposition: 'inline'
         }
       ]
     };
