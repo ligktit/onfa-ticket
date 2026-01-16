@@ -2,25 +2,21 @@ import { connectDB, Ticket } from './db.js';
 import nodemailer from 'nodemailer';
 import QRCode from 'qrcode';
 
-// Hàm tạo và lưu QR code vào database
-async function generateAndSaveQRCode(ticket) {
+// Hàm tạo QR code từ Ticket ID (không lưu vào database vì có thể tạo lại bất cứ lúc nào)
+async function generateQRCode(ticketId) {
   try {
-    // Tạo QR code từ ticket ID
-    const qrCodeDataURL = await QRCode.toDataURL(ticket.id, {
+    // Tạo QR code từ ticket ID - khi scan sẽ decode ra chính Ticket ID
+    const qrCodeDataURL = await QRCode.toDataURL(ticketId, {
       errorCorrectionLevel: 'H',
       type: 'image/png',
       width: 300,
       margin: 1
     });
     
-    // Lưu QR code vào database
-    ticket.qrCodeDataURL = qrCodeDataURL;
-    await ticket.save();
-    
-    console.log(`✅ Đã tạo và lưu QR code cho ticket ${ticket.id}`);
+    console.log(`✅ Đã tạo QR code cho ticket ${ticketId}`);
     return qrCodeDataURL;
   } catch (error) {
-    console.error(`❌ Lỗi tạo QR code cho ticket ${ticket.id}:`, error);
+    console.error(`❌ Lỗi tạo QR code cho ticket ${ticketId}:`, error);
     throw error;
   }
 }
@@ -40,18 +36,9 @@ const sendTicketEmail = async (ticket) => {
     throw new Error('Missing SMTP credentials');
   }
 
-  // Lấy QR code từ database hoặc tạo mới nếu chưa có
-  let qrCodeDataURL = ticket.qrCodeDataURL;
-  
-  if (!qrCodeDataURL) {
-    // Nếu chưa có QR code, tạo và lưu vào database
-    // Hàm generateAndSaveQRCode sẽ lưu vào database và return QR code data URL
-    qrCodeDataURL = await generateAndSaveQRCode(ticket);
-    
-    if (!qrCodeDataURL) {
-      throw new Error('Không thể tạo QR code');
-    }
-  }
+  // Tạo QR code từ Ticket ID (không lưu vào database)
+  // QR code được tạo từ ticket.id, khi scan sẽ decode ra chính ticket.id
+  const qrCodeDataURL = await generateQRCode(ticket.id);
 
   const tierName = ticket.tier === 'supervip' ? 'Super VIP' : ticket.tier === 'vvip' ? 'VIP A' : 'VIP B';
   const emailHTML = `

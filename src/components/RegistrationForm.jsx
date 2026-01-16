@@ -382,7 +382,7 @@ const RegistrationForm = ({ onSuccess }) => {
                 <div className="space-y-2">
                   <div className="flex items-baseline gap-2">
                     <span className="text-xs text-gray-500 font-medium">Giá:</span>
-                    <span className="text-base font-bold text-yellow-700">200 OFT</span>
+                    <span className="text-base font-bold text-yellow-700">{TIER_CONFIG.supervip.price}</span>
                   </div>
                   <div className="flex items-baseline gap-2">
                     <span className="text-xs text-gray-500 font-medium">Còn lại:</span>

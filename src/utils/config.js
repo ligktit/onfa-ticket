@@ -2,7 +2,7 @@
 export const TIER_CONFIG = {
   supervip: {
     label: "Vé Super VIP",
-    price: "200 OFT",
+    price: "1000 OFT",
     benefits: [
       "Khu vực chỗ ngồi VIP nhất, ngay sát sân khấu với tầm nhìn tuyệt đối",
       "Trọn bộ quà tặng cao cấp và độc quyền từ Mettitech và ONFA",
