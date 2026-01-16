@@ -9,6 +9,7 @@ import {
   Calendar,
   Upload,
   ImageIcon,
+  Loader2,
 } from "lucide-react";
 import { BackendAPI } from "../utils/api";
 import { TIER_CONFIG } from "../utils/config";
@@ -36,10 +37,12 @@ const RegistrationForm = ({ onSuccess }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [apiError, setApiError] = useState("");
   const [isSuccess, setIsSuccess] = useState(false);
+  const [isLoadingStats, setIsLoadingStats] = useState(true);
 
   // Load stats khi mở form
   useEffect(() => {
     const loadStats = async () => {
+      setIsLoadingStats(true);
       try {
         const data = await BackendAPI.fetchData();
         if (data && data.stats) {
@@ -49,6 +52,8 @@ const RegistrationForm = ({ onSuccess }) => {
       } catch (error) {
         console.error("Lỗi load stats:", error);
         // Không hiển thị lỗi ở đây, chỉ khi submit form mới hiển thị
+      } finally {
+        setIsLoadingStats(false);
       }
     };
     loadStats();
@@ -201,7 +206,7 @@ const RegistrationForm = ({ onSuccess }) => {
               </p>
             </div>
             <button
-              onClick={() => {
+              onClick={async () => {
                 setIsSuccess(false);
                 setFormData({
                   name: "",
@@ -214,6 +219,18 @@ const RegistrationForm = ({ onSuccess }) => {
                 setErrors({});
                 setTouched({});
                 setApiError("");
+                // Reload stats để cập nhật số lượng vé còn lại
+                setIsLoadingStats(true);
+                try {
+                  const data = await BackendAPI.fetchData();
+                  if (data && data.stats) {
+                    setTicketStats(data.stats);
+                  }
+                } catch (error) {
+                  console.error("Lỗi load stats:", error);
+                } finally {
+                  setIsLoadingStats(false);
+                }
               }}
               className="px-6 sm:px-8 py-3 sm:py-4 bg-yellow-500 text-black rounded-lg font-semibold hover:bg-yellow-400 transition shadow-lg text-sm sm:text-base"
             >
@@ -225,9 +242,42 @@ const RegistrationForm = ({ onSuccess }) => {
     );
   }
 
+  // Loading overlay component
+  const LoadingOverlay = () => (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center">
+      <div className="bg-white rounded-2xl shadow-2xl p-8 sm:p-10 max-w-md mx-4 border-2 border-yellow-400">
+        <div className="flex flex-col items-center">
+          <div className="relative mb-6">
+            <Loader2 className="w-16 h-16 text-yellow-500 animate-spin" />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-8 h-8 bg-yellow-100 rounded-full"></div>
+            </div>
+          </div>
+          <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">
+            {isSubmitting ? "Đang xử lý..." : "Đang kết nối với server..."}
+          </h3>
+          <p className="text-sm sm:text-base text-gray-600 text-center">
+            {isSubmitting 
+              ? "Vui lòng đợi trong giây lát, chúng tôi đang xử lý đăng ký của bạn"
+              : "Đang tải thông tin vé, vui lòng đợi..."
+            }
+          </p>
+          <div className="mt-6 w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+            <div className="bg-gradient-to-r from-yellow-400 to-yellow-600 h-2 rounded-full animate-pulse" style={{ width: '60%' }}></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="mx-auto w-full">
-      <div className="bg-white rounded-xl sm:rounded-2xl shadow-2xl overflow-hidden border-2 border-yellow-400">
+    <div className="mx-auto w-full relative">
+      {/* Loading Overlay */}
+      {(isLoadingStats || isSubmitting) && <LoadingOverlay />}
+      
+      <div className={`bg-white rounded-xl sm:rounded-2xl shadow-2xl overflow-hidden border-2 border-yellow-400 transition-all duration-300 ${
+        (isLoadingStats || isSubmitting) ? 'opacity-50 pointer-events-none' : 'opacity-100'
+      }`}>
         {/* Banner */}
         <div className="w-full h-full bg-gray-900 overflow-hidden">
           <img
