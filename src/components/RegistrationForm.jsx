@@ -59,6 +59,29 @@ const RegistrationForm = ({ onSuccess }) => {
     loadStats();
   }, []);
 
+  // Hàm format ngày sinh tự động thêm dấu "-"
+  const formatDateInput = (value) => {
+    // Chỉ lấy số từ input
+    const numbers = value.replace(/\D/g, '');
+    
+    // Giới hạn tối đa 8 số (ddmmyyyy)
+    const limitedNumbers = numbers.slice(0, 8);
+    
+    // Format: dd-mm-yyyy
+    let formatted = '';
+    if (limitedNumbers.length > 0) {
+      formatted = limitedNumbers.slice(0, 2);
+      if (limitedNumbers.length > 2) {
+        formatted += '-' + limitedNumbers.slice(2, 4);
+      }
+      if (limitedNumbers.length > 4) {
+        formatted += '-' + limitedNumbers.slice(4, 8);
+      }
+    }
+    
+    return formatted;
+  };
+
   // --- Validations ---
   const validateName = (name) => {
     if (!name.trim()) return "Vui lòng nhập họ tên";
@@ -434,11 +457,11 @@ const RegistrationForm = ({ onSuccess }) => {
               <input
                 type="text"
                 maxLength="10"
-                placeholder="dd-mm-yyyy"
+                placeholder="dd-mm-yyyy (VD: 15012000)"
                 value={formData.dob}
                 onChange={(e) => {
-                  const val = e.target.value;
-                  if (/^[\d-]*$/.test(val)) handleChange("dob", val);
+                  const formatted = formatDateInput(e.target.value);
+                  handleChange("dob", formatted);
                 }}
                 onBlur={() => handleBlur("dob")}
                 className={`w-full px-4 py-3 rounded-lg border-2 focus:outline-none focus:ring-2 ${
