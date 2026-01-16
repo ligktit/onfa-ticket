@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Camera, CheckCircle, AlertCircle, LogOut, Scan, Search, Filter } from "lucide-react";
+import { Camera, CheckCircle, AlertCircle, LogOut, Scan, Search, Filter, Loader2 } from "lucide-react";
 import { Html5Qrcode } from "html5-qrcode";
 import { BackendAPI } from "../utils/api";
 import { TIER_CONFIG, getTierName } from "../utils/config";
@@ -25,6 +25,8 @@ const AdminApp = () => {
   });
   const [error, setError] = useState("");
   const [connectionError, setConnectionError] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [isScanning, setIsScanning] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -39,7 +41,10 @@ const AdminApp = () => {
   };
 
   // Hàm load dữ liệu từ Server
-  const loadData = async () => {
+  const loadData = async (showLoading = false) => {
+    if (showLoading || isInitialLoad) {
+      setIsLoading(true);
+    }
     try {
       const data = await BackendAPI.fetchData();
       if (data) {
@@ -52,6 +57,11 @@ const AdminApp = () => {
     } catch (error) {
       console.error("Lỗi load data:", error);
       setConnectionError("Lỗi kết nối tới server, không load được dữ liệu");
+    } finally {
+      if (showLoading || isInitialLoad) {
+        setIsLoading(false);
+        setIsInitialLoad(false);
+      }
     }
   };
 
@@ -85,8 +95,10 @@ const AdminApp = () => {
   }, [tickets, searchQuery, filterStatus, filterTier]);
 
   useEffect(() => {
-    loadData();
-    const interval = setInterval(loadData, 5000); // Auto refresh 5s
+    loadData(true); // Initial load với loading overlay
+    const interval = setInterval(() => {
+      loadData(false); // Auto refresh không hiển thị loading overlay
+    }, 5000); // Auto refresh 5s
     return () => {
       clearInterval(interval);
     };
@@ -157,7 +169,7 @@ const AdminApp = () => {
       const ticket = await BackendAPI.checkIn(ticketId.trim());
       setScanResult(ticket);
       setScanInput("");
-      loadData();
+      loadData(false); // Refresh không hiển thị loading overlay
     } catch (err) {
       setError(err.message);
       setScanResult(null);
@@ -174,12 +186,42 @@ const AdminApp = () => {
 
   const handleStatusChange = async (ticketId, newStatus) => {
     await BackendAPI.updateTicketStatus(ticketId, newStatus);
-    loadData();
+    loadData(false); // Refresh không hiển thị loading overlay
   };
 
+  // Loading overlay component
+  const LoadingOverlay = () => (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center">
+      <div className="bg-gray-800 rounded-2xl shadow-2xl p-8 sm:p-10 max-w-md mx-4 border-2 border-yellow-400">
+        <div className="flex flex-col items-center">
+          <div className="relative mb-6">
+            <Loader2 className="w-16 h-16 text-yellow-500 animate-spin" />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-8 h-8 bg-yellow-100 rounded-full"></div>
+            </div>
+          </div>
+          <h3 className="text-xl sm:text-2xl font-bold text-yellow-400 mb-2">
+            Đang kết nối với server...
+          </h3>
+          <p className="text-sm sm:text-base text-gray-300 text-center">
+            Đang tải dữ liệu vé và thống kê, vui lòng đợi...
+          </p>
+          <div className="mt-6 w-full bg-gray-700 rounded-full h-2 overflow-hidden">
+            <div className="bg-gradient-to-r from-yellow-400 to-yellow-600 h-2 rounded-full animate-pulse" style={{ width: '60%' }}></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 font-sans">
-      <div className="container mx-auto px-4 sm:px-6 max-w-[1200px] py-4 sm:py-6 md:py-8">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 font-sans relative">
+      {/* Loading Overlay */}
+      {isLoading && <LoadingOverlay />}
+      
+      <div className={`container mx-auto px-4 sm:px-6 max-w-[1200px] py-4 sm:py-6 md:py-8 transition-all duration-300 ${
+        isLoading ? 'opacity-30 pointer-events-none' : 'opacity-100'
+      }`}>
         <div className="text-center mb-6 sm:mb-8 relative">
           <button
             onClick={handleLogout}
