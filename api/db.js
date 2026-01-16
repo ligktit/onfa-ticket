@@ -1,5 +1,9 @@
 // Database connection helper cho Vercel Serverless Functions
 import mongoose from 'mongoose';
+import { createRequire } from 'module';
+
+const require = createRequire(import.meta.url);
+const { TICKET_LIMITS } = require('../ticket-limits.cjs');
 
 const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://onfa_admin:onfa_admin@onfa.tth2epb.mongodb.net/onfa_events?appName=ONFA";
 
@@ -50,11 +54,5 @@ const TicketSchema = new mongoose.Schema({
 });
 
 const Ticket = mongoose.models.Ticket || mongoose.model('Ticket', TicketSchema);
-
-// Ticket Limits
-const TICKET_LIMITS = {
-  vvip: parseInt(process.env.VVIP_LIMIT || '5'),
-  vip: parseInt(process.env.VIP_LIMIT || '10')
-};
 
 export { connectDB, Ticket, TICKET_LIMITS };
