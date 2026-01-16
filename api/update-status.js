@@ -1,4 +1,5 @@
 import { connectDB, Ticket } from './db.js';
+import nodemailer from 'nodemailer';
 import QRCode from 'qrcode';
 
 // Hàm tạo và lưu QR code vào database
@@ -23,8 +24,6 @@ async function generateAndSaveQRCode(ticket) {
     throw error;
   }
 }
-import nodemailer from 'nodemailer';
-import QRCode from 'qrcode';
 
 const SMTP_CONFIG = {
   host: process.env.SMTP_HOST || 'smtp.gmail.com',
@@ -41,14 +40,20 @@ const sendTicketEmail = async (ticket) => {
     throw new Error('Missing SMTP credentials');
   }
 
-  const qrCodeDataURL = await QRCode.toDataURL(ticket.id, {
-    errorCorrectionLevel: 'H',
-    type: 'image/png',
-    width: 300,
-    margin: 1,
-  });
+  // Lấy QR code từ database hoặc tạo mới nếu chưa có
+  let qrCodeDataURL = ticket.qrCodeDataURL;
+  
+  if (!qrCodeDataURL) {
+    // Nếu chưa có QR code, tạo và lưu vào database
+    // Hàm generateAndSaveQRCode sẽ lưu vào database và return QR code data URL
+    qrCodeDataURL = await generateAndSaveQRCode(ticket);
+    
+    if (!qrCodeDataURL) {
+      throw new Error('Không thể tạo QR code');
+    }
+  }
 
-  const tierName = ticket.tier === 'vvip' ? 'VIP A' : 'VIP B';
+  const tierName = ticket.tier === 'supervip' ? 'Super VIP' : ticket.tier === 'vvip' ? 'VIP A' : 'VIP B';
   const emailHTML = `
     <!DOCTYPE html>
     <html>
@@ -193,9 +198,7 @@ export default async function handler(req, res) {
     
     const { ticketId, status } = body;
     
-    // Tìm ticket và cập nhật status
-    const ticket = await Ticket.findOne({ id: ticketId });
-    
+    // Optimized: Find and update in one operation
     const ticket = await Ticket.findOneAndUpdate(
       { id: ticketId },
       { status },
@@ -206,26 +209,25 @@ export default async function handler(req, res) {
       return res.status(404).json({ message: 'Vé không tồn tại!' });
     }
 
-    // Cập nhật status
-    ticket.status = status;
-    await ticket.save();
-
-    // Nếu status là PAID, tạo QR code và lưu vào database
+    // Nếu status là PAID, tạo QR code và gửi email
     if (status === 'PAID') {
       try {
-        // Đảm bảo QR code đã được tạo và lưu vào database
-        if (!ticket.qrCodeDataURL) {
-          await generateAndSaveQRCode(ticket);
+        // Reload ticket từ database để đảm bảo có dữ liệu mới nhất (bao gồm status đã cập nhật)
+        const updatedTicket = await Ticket.findOne({ id: ticketId });
+        
+        if (!updatedTicket) {
+          console.error(`❌ Không tìm thấy ticket ${ticketId} sau khi cập nhật`);
+          // Vẫn trả về success vì status đã được cập nhật thành công
+          return res.json({ success: true });
         }
-        console.log(`✅ Đã tạo và lưu QR code cho ticket ${ticketId}`);
-      } catch (qrError) {
-        console.error(`❌ Lỗi tạo QR code cho ticket ${ticketId}:`, qrError);
+        
+        // Gửi email (hàm sendTicketEmail sẽ tự check và tạo QR code nếu chưa có)
+        await sendTicketEmail(updatedTicket);
+        console.log(`✅ Đã gửi email vé cho ticket ${ticketId} (QR code sẽ được tạo tự động nếu chưa có)`);
+      } catch (error) {
+        console.error(`❌ Lỗi gửi email cho ticket ${ticketId}:`, error);
         // Không throw error để không làm gián đoạn việc cập nhật status
-    if (status === 'PAID') {
-      try {
-        await sendTicketEmail(ticket);
-      } catch (emailError) {
-        console.error('Error sending ticket email:', emailError);
+        // Email sẽ được gửi lại khi admin cập nhật lại status
       }
     }
 

@@ -1,5 +1,14 @@
 // Cấu hình hiển thị (Dùng để tham chiếu text)
 export const TIER_CONFIG = {
+  supervip: {
+    label: "Vé Super VIP",
+    price: "200 OFT",
+    benefits: [
+      "Khu vực chỗ ngồi VIP nhất, ngay sát sân khấu với tầm nhìn tuyệt đối",
+      "Trọn bộ quà tặng cao cấp và độc quyền từ Mettitech và ONFA",
+      "Ưu tiên đặc biệt trong các hoạt động và sự kiện"
+    ],
+  },
   vvip: {
     label: "Vé VIP",
     price: "150 OFT",
@@ -19,4 +28,8 @@ export const TIER_CONFIG = {
 export const ADMIN_SECRET_KEY = "ONFA123";
 
 // Helper hiển thị tên vé
-export const getTierName = (tier) => (tier === "vvip" ? "Vé VIP" : "Vé Superior");
+export const getTierName = (tier) => {
+  if (tier === "supervip") return "Vé Super VIP";
+  if (tier === "vvip") return "Vé VIP";
+  return "Vé Superior";
+};

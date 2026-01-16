@@ -188,4 +188,32 @@ export const BackendAPI = {
       throw error;
     }
   },
+
+  // Lazy load payment image on-demand
+  getTicketImage: async (ticketId) => {
+    try {
+      const response = await fetchWithTimeout(
+        `${API_URL}/ticket-image?ticketId=${encodeURIComponent(ticketId)}`,
+        {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+        },
+        10000
+      );
+      
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.message || "Không thể tải ảnh");
+      }
+      
+      const data = await response.json();
+      return data.paymentImage;
+    } catch (error) {
+      console.error("Lỗi getTicketImage:", error);
+      if (isConnectionError(error)) {
+        throw new Error("Không thể kết nối đến Server. Vui lòng thử lại sau");
+      }
+      throw error;
+    }
+  },
 };

@@ -57,6 +57,7 @@ const Ticket = mongoose.model('Ticket', TicketSchema);
 
 // Cấu hình số lượng vé
 const TICKET_LIMITS = {
+  supervip: 10,
   vvip: 5,
   vip: 10
 };
@@ -110,7 +111,7 @@ const sendTicketEmail = async (ticket) => {
     }
 
     // Tạo HTML email với QR code
-    const tierName = ticket.tier === 'vvip' ? 'VIP A' : 'VIP B';
+    const tierName = ticket.tier === 'supervip' ? 'Super VIP' : ticket.tier === 'vvip' ? 'VIP A' : 'VIP B';
     const qrCodeCid = `qr-${ticket.id}@onfa`;
     const emailHTML = `
       <!DOCTYPE html>
@@ -264,6 +265,7 @@ app.get('/api/stats', async (req, res) => {
         {
           $group: {
             _id: null,
+            supervipCount: { $sum: { $cond: [{ $eq: ['$tier', 'supervip'] }, 1, 0] } },
             vvipCount: { $sum: { $cond: [{ $eq: ['$tier', 'vvip'] }, 1, 0] } },
             vipCount: { $sum: { $cond: [{ $eq: ['$tier', 'vip'] }, 1, 0] } },
             checkedInCount: { $sum: { $cond: [{ $eq: ['$status', 'CHECKED_IN'] }, 1, 0] } },
@@ -274,16 +276,19 @@ app.get('/api/stats', async (req, res) => {
     ]);
     
     const queryTime = Date.now() - queryStartTime;
-    const stats = statsResult[0] || { vvipCount: 0, vipCount: 0, checkedInCount: 0, totalRegistered: 0 };
+    const stats = statsResult[0] || { supervipCount: 0, vvipCount: 0, vipCount: 0, checkedInCount: 0, totalRegistered: 0 };
     console.log(`📊 Found ${stats.totalRegistered} tickets in ${queryTime}ms (DB query time)`);
 
     const response = {
       tickets: tickets,
       stats: {
+        supervipCount: stats.supervipCount,
         vvipCount: stats.vvipCount,
         vipCount: stats.vipCount,
+        supervipLimit: TICKET_LIMITS.supervip,
         vvipLimit: TICKET_LIMITS.vvip,
         vipLimit: TICKET_LIMITS.vip,
+        supervipRemaining: Math.max(0, TICKET_LIMITS.supervip - stats.supervipCount),
         vvipRemaining: Math.max(0, TICKET_LIMITS.vvip - stats.vvipCount),
         vipRemaining: Math.max(0, TICKET_LIMITS.vip - stats.vipCount),
         totalRegistered: stats.totalRegistered,

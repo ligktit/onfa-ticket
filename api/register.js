@@ -27,14 +27,16 @@ export default async function handler(req, res) {
     
     const { name, email, phone, dob, tier, paymentImage } = body;
 
-    // Kiểm tra xem còn vé không
-    const count = await Ticket.countDocuments({ tier });
+    // Optimized: Check both conditions in parallel
+    const [count, exist] = await Promise.all([
+      Ticket.countDocuments({ tier }),
+      Ticket.findOne({ email }).select('_id') // Only select _id for existence check
+    ]);
+    
     if (count >= TICKET_LIMITS[tier]) {
       return res.status(400).json({ message: 'Loại vé này đã hết!' });
     }
 
-    // Kiểm tra email trùng
-    const exist = await Ticket.findOne({ email });
     if (exist) {
       return res.status(400).json({ message: 'Email này đã được đăng ký!' });
     }

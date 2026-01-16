@@ -16,10 +16,13 @@ const AdminApp = () => {
   const [tickets, setTickets] = useState([]);
   const [filteredTickets, setFilteredTickets] = useState([]);
   const [stats, setStats] = useState({
+    supervipCount: 0,
     vvipCount: 0,
     vipCount: 0,
+    supervipLimit: 0,
     vvipLimit: 0,
     vipLimit: 0,
+    supervipRemaining: 0,
     vvipRemaining: 0,
     vipRemaining: 0,
     totalRegistered: 0,
@@ -630,7 +633,12 @@ const AdminApp = () => {
         )}
 
         {/* Dashboard Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 mb-6 sm:mb-8">
+          <StatCard
+            label="Vé Super VIP Còn lại"
+            value={`${stats.supervipRemaining}/${stats.supervipLimit || 0}`}
+            color="yellow"
+          />
           <StatCard
             label="Vé VIP Còn lại"
             value={`${stats.vvipRemaining}/${stats.vvipLimit || 0}`}
@@ -857,6 +865,7 @@ const AdminApp = () => {
                     className="px-4 py-3 bg-gray-700/80 backdrop-blur-sm border-2 border-yellow-400/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 text-sm sm:text-base shadow-lg transition-all"
                   >
                     <option value="ALL">Tất cả hạng</option>
+                    <option value="supervip">Vé Super VIP</option>
                     <option value="vvip">Vé VIP</option>
                     <option value="vip">Vé Superior</option>
                   </select>
@@ -911,7 +920,9 @@ const AdminApp = () => {
                           <td className="p-3 sm:p-4">
                             <span
                               className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-bold shadow-lg ${
-                                t.tier === "vvip"
+                                t.tier === "supervip"
+                                  ? "bg-gradient-to-r from-yellow-600 to-yellow-700 text-white"
+                                  : t.tier === "vvip"
                                   ? "bg-gradient-to-r from-yellow-500 to-yellow-600 text-black"
                                   : "bg-gradient-to-r from-yellow-400 to-yellow-500 text-black"
                               }`}

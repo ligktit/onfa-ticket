@@ -48,7 +48,9 @@ const CheckInNotification = ({ ticket, onClose }) => {
             <span className="text-gray-300 text-sm">Hạng vé:</span>
             <span
               className={`px-3 py-1 rounded text-sm font-semibold ${
-                ticket.tier === "vvip"
+                ticket.tier === "supervip"
+                  ? "bg-yellow-600 text-white"
+                  : ticket.tier === "vvip"
                   ? "bg-yellow-500 text-black"
                   : "bg-yellow-400 text-black"
               }`}

@@ -5,7 +5,8 @@ const parseLimit = (value, fallback) => {
 
 const TICKET_LIMITS = {
   vvip: parseLimit(process.env.VVIP_LIMIT, 10),
-  vip: parseLimit(process.env.VIP_LIMIT, 20)
+  vip: parseLimit(process.env.VIP_LIMIT, 20),
+  supervip: parseLimit(process.env.SUPERVIP_LIMIT, 5)
 };
 
 module.exports = { TICKET_LIMITS };

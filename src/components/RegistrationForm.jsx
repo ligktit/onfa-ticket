@@ -27,8 +27,10 @@ const RegistrationForm = ({ onSuccess }) => {
 
   // State lưu trữ thống kê vé để validate real-time (load từ API)
   const [ticketStats, setTicketStats] = useState({
+    supervipLimit: 0,
     vvipLimit: 0,
     vipLimit: 0,
+    supervipRemaining: 0,
     vvipRemaining: 0,
     vipRemaining: 0,
   });
@@ -112,6 +114,8 @@ const RegistrationForm = ({ onSuccess }) => {
     img ? "" : "Vui lòng tải ảnh thanh toán";
 
   const validateTier = (tier) => {
+    if (tier === "supervip" && ticketStats.supervipRemaining <= 0)
+      return "Vé Super VIP đã hết!";
     if (tier === "vvip" && ticketStats.vvipRemaining <= 0)
       return "Vé VIP đã hết!";
     if (tier === "vip" && ticketStats.vipRemaining <= 0)
@@ -342,7 +346,71 @@ const RegistrationForm = ({ onSuccess }) => {
               <Ticket className="inline mr-2" size={18} />
               Chọn Hạng vé <span className="text-red-500">*</span>
             </label>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {/* Vé Super VIP Card */}
+              <button
+                type="button"
+                onClick={() => handleChange("tier", "supervip")}
+                disabled={ticketStats.supervipRemaining === 0}
+                className={`relative p-5 rounded-xl border transition-all duration-300 text-left h-full ${
+                  formData.tier === "supervip"
+                    ? "border-yellow-400 bg-gradient-to-br from-yellow-50 to-yellow-100 shadow-lg shadow-yellow-200/50"
+                    : "border-gray-200 bg-white hover:border-yellow-300 hover:shadow-md"
+                } ${
+                  ticketStats.supervipRemaining === 0
+                    ? "opacity-50 cursor-not-allowed"
+                    : "cursor-pointer"
+                }`}
+              >
+                {formData.tier === "supervip" && (
+                  <div className="absolute top-3 right-3">
+                    <CheckCircle className="text-yellow-600" size={24} strokeWidth={2.5} />
+                  </div>
+                )}
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-2xl">👑</span>
+                  <span
+                    className={`font-bold text-lg ${
+                      formData.tier === "supervip"
+                        ? "text-yellow-700"
+                        : "text-gray-800"
+                    }`}
+                  >
+                    Vé Super VIP
+                  </span>
+                </div>
+                <div className="space-y-2">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-xs text-gray-500 font-medium">Giá:</span>
+                    <span className="text-base font-bold text-yellow-700">200 OFT</span>
+                  </div>
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-xs text-gray-500 font-medium">Còn lại:</span>
+                    <span className={`text-sm font-bold ${
+                      ticketStats.supervipRemaining === 0 ? "text-red-600" : "text-gray-800"
+                    }`}>
+                      {ticketStats.supervipRemaining}
+                    </span>
+                  </div>
+                  <div className="pt-2 border-t border-gray-200 mt-3">
+                    <ul className="space-y-1.5 text-xs text-gray-600">
+                      <li className="flex items-start gap-2">
+                        <span className="text-yellow-500 mt-0.5">•</span>
+                        <span>Khu vực chỗ ngồi VIP nhất, ngay sát sân khấu với tầm nhìn tuyệt đối</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-yellow-500 mt-0.5">•</span>
+                        <span>Trọn bộ quà tặng cao cấp và độc quyền từ Mettitech và ONFA</span>
+                      </li>
+                      <li className="flex items-start gap-2">
+                        <span className="text-yellow-500 mt-0.5">•</span>
+                        <span>Ưu tiên đặc biệt trong các hoạt động và sự kiện</span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </button>
+
               {/* Vé VIP Card */}
               <button
                 type="button"
