@@ -26,7 +26,6 @@ const AdminApp = () => {
   const [error, setError] = useState("");
   const [connectionError, setConnectionError] = useState("");
   const [isLoading, setIsLoading] = useState(true);
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [isScanning, setIsScanning] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -42,7 +41,7 @@ const AdminApp = () => {
 
   // Hàm load dữ liệu từ Server
   const loadData = async (showLoading = false) => {
-    if (showLoading || isInitialLoad) {
+    if (showLoading) {
       setIsLoading(true);
     }
     try {
@@ -58,9 +57,8 @@ const AdminApp = () => {
       console.error("Lỗi load data:", error);
       setConnectionError("Lỗi kết nối tới server, không load được dữ liệu");
     } finally {
-      if (showLoading || isInitialLoad) {
+      if (showLoading) {
         setIsLoading(false);
-        setIsInitialLoad(false);
       }
     }
   };
