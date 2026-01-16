@@ -162,6 +162,98 @@ export const BackendAPI = {
   },
 
 
+  updateTicketTier: async (ticketId, newTier) => {
+    try {
+      console.log(`🔄 Updating ticket ${ticketId} tier to: ${newTier}`);
+      console.log(`🔗 API URL: ${API_URL}/update-status`);
+      
+      const response = await fetchWithTimeout(
+        `${API_URL}/update-status`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ticketId, tier: newTier }),
+        },
+        10000
+      );
+      
+      if (!response.ok) {
+        let errorMessage = "Cập nhật thất bại";
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+          console.error(`❌ Server error (${response.status}):`, errorData);
+        } catch (e) {
+          const errorText = await response.text().catch(() => '');
+          console.error(`❌ Server error (${response.status}):`, errorText);
+          errorMessage = errorText || `Server error: ${response.status} ${response.statusText}`;
+        }
+        throw new Error(errorMessage);
+      }
+      
+      const data = await response.json();
+      console.log(`✅ Ticket tier updated successfully`);
+      return data;
+    } catch (error) {
+      console.error("❌ Lỗi updateTicketTier:", error);
+      console.error("❌ Error details:", {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
+      if (isConnectionError(error)) {
+        throw new Error("Không thể kết nối đến Server. Vui lòng thử lại sau");
+      }
+      throw error;
+    }
+  },
+
+  updateTicketStatusAndTier: async (ticketId, newStatus, newTier) => {
+    try {
+      console.log(`🔄 Updating ticket ${ticketId} status to: ${newStatus}, tier to: ${newTier}`);
+      console.log(`🔗 API URL: ${API_URL}/update-status`);
+      
+      const response = await fetchWithTimeout(
+        `${API_URL}/update-status`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ticketId, status: newStatus, tier: newTier }),
+        },
+        10000
+      );
+      
+      if (!response.ok) {
+        let errorMessage = "Cập nhật thất bại";
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+          console.error(`❌ Server error (${response.status}):`, errorData);
+        } catch (e) {
+          const errorText = await response.text().catch(() => '');
+          console.error(`❌ Server error (${response.status}):`, errorText);
+          errorMessage = errorText || `Server error: ${response.status} ${response.statusText}`;
+        }
+        throw new Error(errorMessage);
+      }
+      
+      const data = await response.json();
+      console.log(`✅ Ticket status and tier updated successfully`);
+      return data;
+    } catch (error) {
+      console.error("❌ Lỗi updateTicketStatusAndTier:", error);
+      console.error("❌ Error details:", {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
+      if (isConnectionError(error)) {
+        throw new Error("Không thể kết nối đến Server. Vui lòng thử lại sau");
+      }
+      throw error;
+    }
+  },
+
   updateTicketStatus: async (ticketId, newStatus) => {
     try {
       console.log(`🔄 Updating ticket ${ticketId} to status: ${newStatus}`);

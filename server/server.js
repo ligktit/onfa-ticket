@@ -395,15 +395,20 @@ app.get('/api/ticket/:ticketId/image', async (req, res) => {
 // API 4: Cập nhật trạng thái (Admin)
 app.post('/api/update-status', async (req, res) => {
   try {
-    const { ticketId, status } = req.body;
+    const { ticketId, status, tier } = req.body;
     const ticket = await Ticket.findOne({ id: ticketId });
     
     if (!ticket) {
       return res.status(404).json({ message: 'Vé không tồn tại!' });
     }
     
-    // Cập nhật status
-    ticket.status = status;
+    // Cập nhật status và/hoặc tier
+    if (status) {
+      ticket.status = status;
+    }
+    if (tier) {
+      ticket.tier = tier;
+    }
     await ticket.save();
 
     // Send webhook to n8n for status change logging

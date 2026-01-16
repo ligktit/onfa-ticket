@@ -546,7 +546,7 @@ const RegistrationForm = ({ onSuccess }) => {
               value={formData.name}
               onChange={(e) => handleChange("name", e.target.value)}
               onBlur={() => handleBlur("name")}
-              className={`w-full px-4 py-3 rounded-lg border bg-[#f2f4f7] focus:outline-none focus:ring-2 ${
+              className={`w-full px-4 py-3 rounded-lg border bg-[#f2f4f7] text-black placeholder-gray-500 focus:outline-none focus:ring-2 ${
                 errors.name && touched.name
                   ? "border-red-500"
                   : "border-gray-300"
@@ -569,7 +569,7 @@ const RegistrationForm = ({ onSuccess }) => {
               value={formData.email}
               onChange={(e) => handleChange("email", e.target.value)}
               onBlur={() => handleBlur("email")}
-              className={`w-full px-4 py-3 rounded-lg border bg-[#f2f4f7] focus:outline-none focus:ring-2 ${
+              className={`w-full px-4 py-3 rounded-lg border bg-[#f2f4f7] text-black placeholder-gray-500 focus:outline-none focus:ring-2 ${
                 errors.email && touched.email
                   ? "border-red-500"
                   : "border-gray-300"
@@ -593,7 +593,7 @@ const RegistrationForm = ({ onSuccess }) => {
                 value={formData.phone}
                 onChange={(e) => handleChange("phone", e.target.value)}
                 onBlur={() => handleBlur("phone")}
-                className={`w-full px-4 py-3 rounded-lg border bg-[#f2f4f7] focus:outline-none focus:ring-2 ${
+                className={`w-full px-4 py-3 rounded-lg border bg-[#f2f4f7] text-black placeholder-gray-500 focus:outline-none focus:ring-2 ${
                   errors.phone && touched.phone
                     ? "border-red-500"
                     : "border-gray-300"
@@ -621,7 +621,7 @@ const RegistrationForm = ({ onSuccess }) => {
                   handleChange("dob", formatted);
                 }}
                 onBlur={() => handleBlur("dob")}
-                className={`w-full px-4 py-3 rounded-lg border bg-[#f2f4f7] focus:outline-none focus:ring-2 ${
+                className={`w-full px-4 py-3 rounded-lg border bg-[#f2f4f7] text-black placeholder-gray-500 focus:outline-none focus:ring-2 ${
                   errors.dob && touched.dob
                     ? "border-red-500"
                     : "border-gray-300"
