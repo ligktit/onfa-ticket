@@ -1,5 +1,7 @@
 import { connectDB, Ticket } from './db.js';
 import QRCode from 'qrcode';
+import nodemailer from 'nodemailer';
+import axios from 'axios';
 
 // Hàm tạo và lưu QR code vào database
 async function generateAndSaveQRCode(ticket) {
@@ -23,8 +25,6 @@ async function generateAndSaveQRCode(ticket) {
     throw error;
   }
 }
-import nodemailer from 'nodemailer';
-import QRCode from 'qrcode';
 
 const SMTP_CONFIG = {
   host: process.env.SMTP_HOST || 'smtp.gmail.com',
@@ -41,7 +41,7 @@ const sendTicketEmail = async (ticket) => {
     throw new Error('Missing SMTP credentials');
   }
 
-  const qrCodeDataURL = await QRCode.toDataURL(ticket.id, {
+  const qrCodeDataURL = ticket.qrCodeDataURL || await QRCode.toDataURL(ticket.id, {
     errorCorrectionLevel: 'H',
     type: 'image/png',
     width: 300,
@@ -166,6 +166,46 @@ const sendTicketEmail = async (ticket) => {
   await transporter.sendMail(mailOptions);
 };
 
+// n8n webhook service (simplified version for Vercel)
+async function notifyStatusChange(ticket, action = 'append') {
+  const statusChangeWebhookUrl = process.env.N8N_STATUS_CHANGE_WEBHOOK_URL;
+  
+  if (!statusChangeWebhookUrl) {
+    console.warn('⚠️ n8n webhook URL not configured, skipping webhook call');
+    return false;
+  }
+
+  try {
+    const data = {
+      event: 'ticket_status_changed',
+      action: action, // 'append' or 'update'
+      ticket: {
+        id: ticket.id,
+        name: ticket.name,
+        email: ticket.email,
+        phone: ticket.phone,
+        dob: ticket.dob,
+        tier: ticket.tier === 'vvip' ? 'VIP A' : 'VIP B',
+        status: ticket.status, // Only send current status
+        registeredAt: ticket.registeredAt ? new Date(ticket.registeredAt).toISOString() : null,
+        statusChangedAt: new Date().toISOString(),
+      },
+      timestamp: new Date().toISOString(),
+    };
+
+    await axios.post(statusChangeWebhookUrl, data, {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 5000,
+    });
+    
+    console.log(`✅ Webhook sent successfully to n8n`);
+    return true;
+  } catch (error) {
+    console.error(`❌ Error sending webhook to n8n:`, error.message);
+    return false;
+  }
+}
+
 export default async function handler(req, res) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Credentials', true);
@@ -193,9 +233,11 @@ export default async function handler(req, res) {
     
     const { ticketId, status } = body;
     
-    // Tìm ticket và cập nhật status
-    const ticket = await Ticket.findOne({ id: ticketId });
+    if (!ticketId || !status) {
+      return res.status(400).json({ message: 'Missing ticketId or status' });
+    }
     
+    // Find and update ticket
     const ticket = await Ticket.findOneAndUpdate(
       { id: ticketId },
       { status },
@@ -206,32 +248,33 @@ export default async function handler(req, res) {
       return res.status(404).json({ message: 'Vé không tồn tại!' });
     }
 
-    // Cập nhật status
-    ticket.status = status;
-    await ticket.save();
+    // Send webhook to n8n for status change logging
+    // If PAID: append new row, if CHECKED_IN: update existing row, otherwise append
+    const action = status === 'CHECKED_IN' ? 'update' : 'append';
+    await notifyStatusChange(ticket, action);
 
-    // Nếu status là PAID, tạo QR code và lưu vào database
+    // Nếu status là PAID, tạo QR code và gửi email vé tới client
     if (status === 'PAID') {
       try {
         // Đảm bảo QR code đã được tạo và lưu vào database
         if (!ticket.qrCodeDataURL) {
           await generateAndSaveQRCode(ticket);
+          // Reload ticket to get updated QR code
+          await ticket.save();
         }
-        console.log(`✅ Đã tạo và lưu QR code cho ticket ${ticketId}`);
-      } catch (qrError) {
-        console.error(`❌ Lỗi tạo QR code cho ticket ${ticketId}:`, qrError);
-        // Không throw error để không làm gián đoạn việc cập nhật status
-    if (status === 'PAID') {
-      try {
+        
+        // Gửi email với QR code đã lưu
         await sendTicketEmail(ticket);
+        console.log(`✅ Đã gửi email vé cho ticket ${ticketId}`);
       } catch (emailError) {
-        console.error('Error sending ticket email:', emailError);
+        console.error(`❌ Lỗi gửi email cho ticket ${ticketId}:`, emailError);
+        // Không throw error để không làm gián đoạn việc cập nhật status
       }
     }
 
     res.json({ success: true });
   } catch (error) {
     console.error('Error in /api/update-status:', error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: error.message || 'Internal server error' });
   }
 }

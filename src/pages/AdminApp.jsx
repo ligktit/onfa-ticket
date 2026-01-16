@@ -32,6 +32,7 @@ const AdminApp = () => {
   const [selectedImage, setSelectedImage] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("ALL"); // ALL, PENDING, PAID, CHECKED_IN, CANCELLED
+  const [pendingStatusChanges, setPendingStatusChanges] = useState({}); // Track pending status changes: { ticketId: newStatus }
   const [filterTier, setFilterTier] = useState("ALL"); // ALL, vvip, vip
   const [notificationTicket, setNotificationTicket] = useState(null); // For Socket.IO notifications
   const qrCodeRef = useRef(null);
@@ -101,16 +102,19 @@ const AdminApp = () => {
     loadData(true); // Initial load với loading overlay
     
     // Auto refresh with longer interval to reduce database load
-    // Socket.IO handles real-time updates, so polling is just a backup/fallback
+    // In dev: Socket.IO handles real-time updates, polling is backup/fallback
+    // In prod: Socket.IO disabled, polling is the primary update mechanism
     const interval = setInterval(() => {
-      // Only refresh if Socket.IO is disconnected (as fallback)
-      // If Socket.IO is connected, it handles real-time updates, so no need to poll
+      // In production, socketRef.current is null, so always poll
+      // In development, only poll if Socket.IO is disconnected
       if (!socketRef.current?.connected) {
-        console.log('⚠️ Socket.IO disconnected, refreshing data via polling...');
+        if (import.meta.env.DEV) {
+          console.log('⚠️ Socket.IO disconnected, refreshing data via polling...');
+        }
         loadData(false);
       }
-      // Otherwise, Socket.IO events will trigger loadData when needed
-    }, 60000); // Auto refresh every 60 seconds (reduced from 5s - 12x reduction in DB queries!)
+      // In dev: Socket.IO events will trigger loadData when connected
+    }, 60000); // Auto refresh every 60 seconds
     
     return () => {
       clearInterval(interval);
@@ -118,39 +122,53 @@ const AdminApp = () => {
   }, []);
 
   // Socket.IO connection for real-time check-in notifications
+  // Only enabled in development mode (production uses polling fallback)
   useEffect(() => {
-    // Determine Socket.IO server URL
-    // If accessed from network IP (phone), use same hostname for Socket.IO
+    // Skip Socket.IO in production
+    if (!import.meta.env.DEV) {
+      console.log('ℹ️ Production mode: Socket.IO disabled. Using polling fallback.');
+      return;
+    }
+
+    // Determine Socket.IO server URL (dev mode only)
     let SOCKET_URL = import.meta.env.VITE_SOCKET_URL;
     
     if (!SOCKET_URL) {
-      if (import.meta.env.DEV) {
-        // In dev mode: if accessing from network IP, use network IP for Socket.IO
-        const hostname = window.location.hostname;
-        if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
-          // Accessed from network IP (phone)
-          SOCKET_URL = `http://${hostname}:5000`;
-        } else {
-          // Accessed from localhost (computer)
-          SOCKET_URL = "http://localhost:5000";
-        }
+      // In dev mode: if accessing from network IP, use network IP for Socket.IO
+      const hostname = window.location.hostname;
+      if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+        // Accessed from network IP (phone)
+        SOCKET_URL = `http://${hostname}:5000`;
       } else {
-        // Production: use same origin
-        SOCKET_URL = window.location.origin;
+        // Accessed from localhost (computer)
+        SOCKET_URL = "http://localhost:5000";
       }
     }
     
+    console.log(`🔌 Connecting to Socket.IO server: ${SOCKET_URL}`);
+    
     // Connect to Socket.IO server
     socketRef.current = io(SOCKET_URL, {
-      transports: ['websocket', 'polling']
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      timeout: 10000
     });
 
     socketRef.current.on('connect', () => {
       console.log('✅ Connected to Socket.IO server');
+      setConnectionError(''); // Clear any connection errors
     });
 
     socketRef.current.on('disconnect', () => {
       console.log('❌ Disconnected from Socket.IO server');
+      console.log('⚠️ Real-time notifications disabled. Using polling fallback.');
+    });
+
+    socketRef.current.on('connect_error', (error) => {
+      console.warn('⚠️ Socket.IO connection error:', error.message);
+      console.warn('⚠️ Falling back to polling for updates.');
     });
 
     // Listen for check-in events
@@ -528,7 +546,28 @@ const AdminApp = () => {
 
   const handleStatusChange = async (ticketId, newStatus) => {
     await BackendAPI.updateTicketStatus(ticketId, newStatus);
+    // Clear pending status change for this ticket
+    setPendingStatusChanges(prev => {
+      const updated = { ...prev };
+      delete updated[ticketId];
+      return updated;
+    });
     loadData(false); // Refresh không hiển thị loading overlay
+  };
+
+  const handleStatusSelectChange = (ticketId, newStatus) => {
+    // Store the pending status change
+    setPendingStatusChanges(prev => ({
+      ...prev,
+      [ticketId]: newStatus
+    }));
+  };
+
+  const handleApplyStatusChange = async (ticketId) => {
+    const newStatus = pendingStatusChanges[ticketId];
+    if (newStatus) {
+      await handleStatusChange(ticketId, newStatus);
+    }
   };
 
   // Loading overlay component
@@ -908,26 +947,37 @@ const AdminApp = () => {
                             )}
                           </td>
                           <td className="p-2 sm:p-3">
-                            <select
-                              value={t.status}
-                              onChange={(e) =>
-                                handleStatusChange(t.id, e.target.value)
-                              }
-                              className="bg-gray-700 text-white text-xs sm:text-sm rounded px-1 sm:px-2 py-1 border border-yellow-400 focus:ring-1 focus:ring-yellow-400"
-                            >
-                              <option value="PENDING" className="text-white">
-                                Chờ CK
-                              </option>
-                              <option value="PAID" className="text-white">
-                                Đã thanh toán
-                              </option>
-                              <option value="CHECKED_IN" className="text-white">
-                                Đã vào
-                              </option>
-                              <option value="CANCELLED" className="text-white">
-                                Hủy
-                              </option>
-                            </select>
+                            <div className="flex items-center gap-1 sm:gap-2">
+                              <select
+                                value={pendingStatusChanges[t.id] || t.status}
+                                onChange={(e) =>
+                                  handleStatusSelectChange(t.id, e.target.value)
+                                }
+                                className="bg-gray-700 text-white text-xs sm:text-sm rounded px-1 sm:px-2 py-1 border border-yellow-400 focus:ring-1 focus:ring-yellow-400 flex-1"
+                              >
+                                <option value="PENDING" className="text-white">
+                                  Chờ CK
+                                </option>
+                                <option value="PAID" className="text-white">
+                                  Đã thanh toán
+                                </option>
+                                <option value="CHECKED_IN" className="text-white">
+                                  Đã vào
+                                </option>
+                                <option value="CANCELLED" className="text-white">
+                                  Hủy
+                                </option>
+                              </select>
+                              {(pendingStatusChanges[t.id] && pendingStatusChanges[t.id] !== t.status) && (
+                                <button
+                                  onClick={() => handleApplyStatusChange(t.id)}
+                                  className="px-2 sm:px-3 py-1 bg-yellow-400 hover:bg-yellow-500 text-gray-900 text-xs sm:text-sm font-semibold rounded border border-yellow-500 transition-colors whitespace-nowrap"
+                                  title="Áp dụng thay đổi"
+                                >
+                                  Áp Dụng
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))
