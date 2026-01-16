@@ -231,7 +231,7 @@ const AdminApp = () => {
             <div className="text-center">
               <div className="flex items-center justify-center gap-3 sm:gap-4 mb-4 sm:mb-2">
                 <div>
-                  <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold bg-gradient-to-r from-yellow-400 via-yellow-500 to-yellow-400 bg-clip-text text-transparent mb-2">
+                  <h1 className="text-3xl sm:text-3xl md:text-4xl lg:text-4xl font-bold bg-gradient-to-r from-yellow-400 via-yellow-500 to-yellow-400 bg-clip-text text-transparent mb-1">
                     ONFA TICKET ADMIN PANEL
                   </h1>
                 </div>
@@ -538,7 +538,7 @@ const AdminApp = () => {
                                 />
                                 <button
                                   onClick={() => setSelectedImage(t.paymentImage)}
-                                  className="text-yellow-400 underline text-xs sm:text-sm hover:text-yellow-300 transition hidden sm:inline font-medium"
+                                  className="text-yellow-400  text-xs sm:text-sm hover:text-yellow-300 transition hidden sm:inline font-medium"
                                 >
                                   Xem
                                 </button>
@@ -584,43 +584,56 @@ const AdminApp = () => {
       {/* Image Modal */}
       {selectedImage && (
         <div
-          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in duration-300"
           onClick={() => setSelectedImage(null)}
         >
-          <div className="bg-white rounded-lg max-w-4xl max-h-[90vh] overflow-auto relative">
-            <button
-              onClick={() => setSelectedImage(null)}
-              className="absolute top-4 right-4 bg-red-500 text-white rounded-full p-2 hover:bg-red-600 transition z-10"
-            >
-              ✕
-            </button>
-            <div className="p-4">
-              <h3 className="text-xl font-bold text-gray-800 mb-4">
+          <div 
+            className="bg-gradient-to-br from-gray-800 via-gray-800 to-gray-900 rounded-2xl sm:rounded-3xl max-w-5xl w-full max-h-[95vh] overflow-hidden relative border-2 border-yellow-400/60 shadow-2xl shadow-yellow-500/20 animate-in zoom-in-95 duration-300"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="bg-gradient-to-r from-yellow-500/20 to-yellow-600/10 border-b-2 border-yellow-400/50 px-6 py-4 flex items-center justify-between">
+              <h3 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-500 bg-clip-text text-transparent">
                 Hình ảnh thanh toán
               </h3>
-              <img
-                src={selectedImage}
-                alt="Payment proof"
-                className="w-full h-auto rounded-lg border border-gray-300"
-                onClick={(e) => e.stopPropagation()}
-              />
-              <div className="mt-4 flex gap-2">
-                <a
-                  href={selectedImage}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition"
+              <button
+                onClick={() => setSelectedImage(null)}
+                className="bg-gradient-to-r from-red-600 to-red-700 text-white rounded-full p-2 hover:from-red-700 hover:to-red-800 transition-all duration-300 shadow-lg shadow-red-500/30 hover:shadow-xl hover:shadow-red-500/40 hover:scale-110 z-10"
+                aria-label="Đóng"
+              >
+                <span className="text-lg font-bold">✕</span>
+              </button>
+            </div>
+
+            {/* Image Container */}
+            <div className="p-6 sm:p-8 bg-gray-900/50">
+              <div className="bg-gray-800/50 rounded-xl p-4 border-2 border-yellow-400/30 shadow-inner">
+                <img
+                  src={selectedImage}
+                  alt="Payment proof"
+                  className="w-full h-auto rounded-lg border-2 border-yellow-400/20 shadow-2xl max-h-[60vh] object-contain mx-auto"
                   onClick={(e) => e.stopPropagation()}
-                >
-                  Mở trong tab mới
-                </a>
-                <button
-                  onClick={() => setSelectedImage(null)}
-                  className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition"
-                >
-                  Đóng
-                </button>
+                />
               </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="px-6 py-4 bg-gradient-to-r from-gray-800/80 to-gray-900/80 border-t-2 border-yellow-400/30 flex flex-col sm:flex-row gap-3 justify-end">
+              <a
+                href={selectedImage}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-5 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all duration-300 font-semibold shadow-lg shadow-blue-500/30 hover:shadow-xl hover:shadow-blue-500/40 hover:scale-105 text-center text-sm sm:text-base"
+                onClick={(e) => e.stopPropagation()}
+              >
+                Mở trong tab mới
+              </a>
+              <button
+                onClick={() => setSelectedImage(null)}
+                className="px-5 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-gray-600 to-gray-700 text-white rounded-xl hover:from-gray-700 hover:to-gray-800 transition-all duration-300 font-semibold shadow-lg shadow-gray-500/30 hover:shadow-xl hover:shadow-gray-500/40 hover:scale-105 text-sm sm:text-base"
+              >
+                Đóng
+              </button>
             </div>
           </div>
         </div>
