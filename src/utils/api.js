@@ -164,6 +164,9 @@ export const BackendAPI = {
 
   updateTicketStatus: async (ticketId, newStatus) => {
     try {
+      console.log(`🔄 Updating ticket ${ticketId} to status: ${newStatus}`);
+      console.log(`🔗 API URL: ${API_URL}/update-status`);
+      
       const response = await fetchWithTimeout(
         `${API_URL}/update-status`,
         {
@@ -175,13 +178,30 @@ export const BackendAPI = {
       );
       
       if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(data.message || "Cập nhật thất bại");
+        // Try to get error message from response
+        let errorMessage = "Cập nhật thất bại";
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+          console.error(`❌ Server error (${response.status}):`, errorData);
+        } catch (e) {
+          const errorText = await response.text().catch(() => '');
+          console.error(`❌ Server error (${response.status}):`, errorText);
+          errorMessage = errorText || `Server error: ${response.status} ${response.statusText}`;
+        }
+        throw new Error(errorMessage);
       }
       
-      return await response.json();
+      const data = await response.json();
+      console.log(`✅ Ticket status updated successfully`);
+      return data;
     } catch (error) {
-      console.error("Lỗi updateTicketStatus:", error);
+      console.error("❌ Lỗi updateTicketStatus:", error);
+      console.error("❌ Error details:", {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
       if (isConnectionError(error)) {
         throw new Error("Không thể kết nối đến Server. Vui lòng thử lại sau");
       }

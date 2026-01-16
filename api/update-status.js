@@ -1,6 +1,8 @@
 import { connectDB, Ticket } from './db.js';
 import nodemailer from 'nodemailer';
 import QRCode from 'qrcode';
+import nodemailer from 'nodemailer';
+import axios from 'axios';
 
 // Hàm tạo QR code từ Ticket ID (không lưu vào database vì có thể tạo lại bất cứ lúc nào)
 async function generateQRCode(ticketId) {
@@ -158,6 +160,46 @@ const sendTicketEmail = async (ticket) => {
   await transporter.sendMail(mailOptions);
 };
 
+// n8n webhook service (simplified version for Vercel)
+async function notifyStatusChange(ticket, action = 'append') {
+  const statusChangeWebhookUrl = process.env.N8N_STATUS_CHANGE_WEBHOOK_URL;
+  
+  if (!statusChangeWebhookUrl) {
+    console.warn('⚠️ n8n webhook URL not configured, skipping webhook call');
+    return false;
+  }
+
+  try {
+    const data = {
+      event: 'ticket_status_changed',
+      action: action, // 'append' or 'update'
+      ticket: {
+        id: ticket.id,
+        name: ticket.name,
+        email: ticket.email,
+        phone: ticket.phone,
+        dob: ticket.dob,
+        tier: ticket.tier === 'vvip' ? 'VIP A' : 'VIP B',
+        status: ticket.status, // Only send current status
+        registeredAt: ticket.registeredAt ? new Date(ticket.registeredAt).toISOString() : null,
+        statusChangedAt: new Date().toISOString(),
+      },
+      timestamp: new Date().toISOString(),
+    };
+
+    await axios.post(statusChangeWebhookUrl, data, {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 5000,
+    });
+    
+    console.log(`✅ Webhook sent successfully to n8n`);
+    return true;
+  } catch (error) {
+    console.error(`❌ Error sending webhook to n8n:`, error.message);
+    return false;
+  }
+}
+
 export default async function handler(req, res) {
   // Enable CORS
   res.setHeader('Access-Control-Allow-Credentials', true);
@@ -221,6 +263,6 @@ export default async function handler(req, res) {
     res.json({ success: true });
   } catch (error) {
     console.error('Error in /api/update-status:', error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: error.message || 'Internal server error' });
   }
 }
