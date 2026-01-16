@@ -31,22 +31,40 @@ app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
 const MONGO_URI = "mongodb+srv://onfa_admin:onfa_admin@onfa.tth2epb.mongodb.net/onfa_events?appName=ONFA";
 
 mongoose.connect(MONGO_URI, {
-  dbName: 'onfa_events' // Explicitly specify database name
+  dbName: 'onfa_events', // Explicitly specify database name
+  serverSelectionTimeoutMS: 30000, // Timeout after 30s
+  socketTimeoutMS: 45000,
+  connectTimeoutMS: 30000,
+  maxPoolSize: 10,
+  minPoolSize: 2,
+  retryWrites: true,
+  w: 'majority',
+  retryReads: true
 })
-  .then(() => console.log("✅ Đã kết nối thành công tới MongoDB Cloud - Database: onfa_test"))
-  .catch(err => console.error("❌ Lỗi kết nối MongoDB:", err));
+  .then(() => {
+    console.log("✅ Đã kết nối thành công tới MongoDB Cloud - Database: onfa_events");
+    console.log(`📊 MongoDB Connection State: ${mongoose.connection.readyState}`);
+  })
+  .catch(err => {
+    console.error("❌ Lỗi kết nối MongoDB:", err);
+    console.error("📋 Error Details:", {
+      name: err.name,
+      message: err.message,
+      code: err.code
+    });
+  });
 
 // 3. Tạo khuôn mẫu cho vé (Schema)
 const TicketSchema = new mongoose.Schema({
-  id: { type: String, unique: true },
+  id: { type: String, unique: true, index: true }, // Index for faster lookups
   name: String,
-  email: String,
+  email: { type: String, index: true }, // Index for faster email lookups
   phone: String,
   dob: String,         // Ngày sinh
-  tier: String,        // Hạng vé
+  tier: { type: String, index: true }, // Index for faster tier filtering
   paymentImage: String,// Ảnh thanh toán (Base64)
   qrCodeDataURL: String, // QR code image (Base64 Data URL)
-  status: { type: String, default: 'PENDING' },
+  status: { type: String, default: 'PENDING', index: true }, // Index for faster status filtering
   registeredAt: { type: Date, default: Date.now }
 });
 
@@ -245,29 +263,59 @@ app.get('/api/stats', async (req, res) => {
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     
-    const tickets = await Ticket.find(); // Lấy hết vé trong kho ra đếm
-    console.log(`📊 Found ${tickets.length} tickets`);
+    // Optimized: Use aggregation for stats and fetch tickets efficiently
+    // Fetch paymentImage but exclude qrCodeDataURL (only needed for emails, not dashboard)
+    const queryStartTime = Date.now();
     
-    const vvipCount = tickets.filter(t => t.tier === 'vvip').length;
-    const vipCount = tickets.filter(t => t.tier === 'vip').length;
-    const checkedInCount = tickets.filter(t => t.status === 'CHECKED_IN').length;
+    const [tickets, statsResult] = await Promise.all([
+      Ticket.find()
+        .select('id name email phone dob tier status registeredAt paymentImage') // Include paymentImage for dashboard thumbnails
+        .lean() // Use lean() for faster queries (returns plain JS objects, not Mongoose documents)
+        .sort({ registeredAt: -1 }), // Sort by newest first
+      Ticket.aggregate([
+        {
+          $group: {
+            _id: null,
+            vvipCount: { $sum: { $cond: [{ $eq: ['$tier', 'vvip'] }, 1, 0] } },
+            vipCount: { $sum: { $cond: [{ $eq: ['$tier', 'vip'] }, 1, 0] } },
+            checkedInCount: { $sum: { $cond: [{ $eq: ['$status', 'CHECKED_IN'] }, 1, 0] } },
+            totalRegistered: { $sum: 1 }
+          }
+        }
+      ])
+    ]);
+    
+    const queryTime = Date.now() - queryStartTime;
+    const stats = statsResult[0] || { vvipCount: 0, vipCount: 0, checkedInCount: 0, totalRegistered: 0 };
+    console.log(`📊 Found ${stats.totalRegistered} tickets in ${queryTime}ms (DB query time)`);
 
     const response = {
       tickets: tickets,
       stats: {
-        vvipCount,
-        vipCount,
+        vvipCount: stats.vvipCount,
+        vipCount: stats.vipCount,
         vvipLimit: TICKET_LIMITS.vvip,
         vipLimit: TICKET_LIMITS.vip,
-        vvipRemaining: Math.max(0, TICKET_LIMITS.vvip - vvipCount),
-        vipRemaining: Math.max(0, TICKET_LIMITS.vip - vipCount),
-        totalRegistered: tickets.length,
-        totalCheckedIn: checkedInCount
+        vvipRemaining: Math.max(0, TICKET_LIMITS.vvip - stats.vvipCount),
+        vipRemaining: Math.max(0, TICKET_LIMITS.vip - stats.vipCount),
+        totalRegistered: stats.totalRegistered,
+        totalCheckedIn: stats.checkedInCount
       }
     };
     
+    // Calculate response size for debugging
+    const responseSize = JSON.stringify(response).length;
+    const responseSizeKB = (responseSize / 1024).toFixed(2);
+    const responseSizeMB = (responseSize / (1024 * 1024)).toFixed(2);
+    
     const duration = Date.now() - startTime;
     console.log(`📊 Response sent in ${duration}ms`);
+    console.log(`📊 Response size: ${responseSizeKB} KB (${responseSizeMB} MB)`);
+    
+    // Warn if response is too large
+    if (responseSize > 5 * 1024 * 1024) { // > 5MB
+      console.warn(`⚠️ Large response size detected! Consider pagination or excluding large fields.`);
+    }
     
     res.json(response);
   } catch (error) {
@@ -335,6 +383,22 @@ app.post('/api/checkin', async (req, res) => {
     });
     
     res.json(ticket);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// API 4.5: Get payment image for a specific ticket (on-demand loading)
+app.get('/api/ticket/:ticketId/image', async (req, res) => {
+  try {
+    const { ticketId } = req.params;
+    const ticket = await Ticket.findOne({ id: ticketId }).select('paymentImage');
+    
+    if (!ticket) {
+      return res.status(404).json({ message: 'Vé không tồn tại!' });
+    }
+    
+    res.json({ paymentImage: ticket.paymentImage || null });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

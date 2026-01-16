@@ -99,9 +99,19 @@ const AdminApp = () => {
 
   useEffect(() => {
     loadData(true); // Initial load với loading overlay
+    
+    // Auto refresh with longer interval to reduce database load
+    // Socket.IO handles real-time updates, so polling is just a backup/fallback
     const interval = setInterval(() => {
-      loadData(false); // Auto refresh không hiển thị loading overlay
-    }, 5000); // Auto refresh 5s
+      // Only refresh if Socket.IO is disconnected (as fallback)
+      // If Socket.IO is connected, it handles real-time updates, so no need to poll
+      if (!socketRef.current?.connected) {
+        console.log('⚠️ Socket.IO disconnected, refreshing data via polling...');
+        loadData(false);
+      }
+      // Otherwise, Socket.IO events will trigger loadData when needed
+    }, 60000); // Auto refresh every 60 seconds (reduced from 5s - 12x reduction in DB queries!)
+    
     return () => {
       clearInterval(interval);
     };
@@ -148,8 +158,26 @@ const AdminApp = () => {
       console.log('📢 Received check-in notification:', ticketData);
       // Show notification popup
       setNotificationTicket(ticketData);
-      // Auto refresh data
-      loadData(false);
+      // Update local state instead of full refresh to reduce DB load
+      // Socket.IO event already contains updated ticket data, so update locally
+      setTickets(prevTickets => {
+        const updated = prevTickets.map(t => 
+          t.id === ticketData.ticketId ? { 
+            ...t, 
+            status: ticketData.status || 'CHECKED_IN',
+            // Update other fields if provided
+            ...(ticketData.name && { name: ticketData.name }),
+            ...(ticketData.email && { email: ticketData.email })
+          } : t
+        );
+        // Update stats locally without DB query
+        const checkedInCount = updated.filter(t => t.status === 'CHECKED_IN').length;
+        setStats(prevStats => ({
+          ...prevStats,
+          totalCheckedIn: checkedInCount
+        }));
+        return updated;
+      });
     });
 
     // Cleanup on unmount
@@ -866,6 +894,7 @@ const AdminApp = () => {
                                   alt="Payment"
                                   className="w-8 h-8 sm:w-12 sm:h-12 object-cover rounded border border-yellow-400 cursor-pointer hover:opacity-80 transition"
                                   onClick={() => setSelectedImage(t.paymentImage)}
+                                  loading="lazy" // Lazy load images
                                 />
                                 <button
                                   onClick={() => setSelectedImage(t.paymentImage)}
