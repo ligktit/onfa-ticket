@@ -35,6 +35,7 @@ const RegistrationForm = ({ onSuccess }) => {
   const [touched, setTouched] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [apiError, setApiError] = useState("");
+  const [isSuccess, setIsSuccess] = useState(false);
 
   // Load stats khi mở form
   useEffect(() => {
@@ -167,14 +168,62 @@ const RegistrationForm = ({ onSuccess }) => {
 
     setIsSubmitting(true);
     try {
-      const ticket = await BackendAPI.registerTicket(formData);
-      onSuccess(ticket);
+      await BackendAPI.registerTicket(formData);
+      setIsSuccess(true);
     } catch (err) {
       setApiError(err.message);
     } finally {
       setIsSubmitting(false);
     }
   };
+
+  // Hiển thị thông báo thành công
+  if (isSuccess) {
+    return (
+      <div className="mx-auto w-full">
+        <div className="bg-white rounded-xl sm:rounded-2xl shadow-2xl overflow-hidden border-2 border-yellow-400">
+          <div className="px-4 sm:px-6 md:px-8 py-8 sm:py-10 md:py-12 text-center">
+            <div className="flex justify-center mb-6">
+              <CheckCircle className="text-green-500" size={64} />
+            </div>
+            <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+              Đăng ký thành công!
+            </h2>
+            <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-4 sm:p-6 mb-6">
+              <p className="text-base sm:text-lg text-gray-800 font-semibold mb-2">
+                Cảm ơn bạn đã đăng ký vé ONFA 2026!
+              </p>
+              <p className="text-sm sm:text-base text-gray-700">
+                Vui lòng đợi xác nhận và nhận thông tin vé qua Email đã đăng ký.
+              </p>
+              <p className="text-sm sm:text-base text-gray-700 mt-2">
+                Email của bạn: <strong className="text-yellow-600">{formData.email}</strong>
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                setIsSuccess(false);
+                setFormData({
+                  name: "",
+                  email: "",
+                  phone: "",
+                  dob: "",
+                  paymentImage: null,
+                  tier: "vip",
+                });
+                setErrors({});
+                setTouched({});
+                setApiError("");
+              }}
+              className="px-6 sm:px-8 py-3 sm:py-4 bg-yellow-500 text-black rounded-lg font-semibold hover:bg-yellow-400 transition shadow-lg text-sm sm:text-base"
+            >
+              Đăng ký vé khác
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto w-full">

@@ -28,7 +28,7 @@ const AdminApp = () => {
   const [isScanning, setIsScanning] = useState(false);
   const [selectedImage, setSelectedImage] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterStatus, setFilterStatus] = useState("ALL"); // ALL, PENDING, CHECKED_IN, CANCELLED
+  const [filterStatus, setFilterStatus] = useState("ALL"); // ALL, PENDING, PAID, CHECKED_IN, CANCELLED
   const [filterTier, setFilterTier] = useState("ALL"); // ALL, vvip, vip
   const qrCodeRef = useRef(null);
   const html5QrCodeRef = useRef(null);
@@ -384,6 +384,7 @@ const AdminApp = () => {
                     >
                       <option value="ALL">Tất cả</option>
                       <option value="PENDING">Chờ CK</option>
+                      <option value="PAID">Đã thanh toán</option>
                       <option value="CHECKED_IN">Đã vào</option>
                       <option value="CANCELLED">Hủy</option>
                     </select>
@@ -483,6 +484,9 @@ const AdminApp = () => {
                             >
                               <option value="PENDING" className="text-white">
                                 Chờ CK
+                              </option>
+                              <option value="PAID" className="text-white">
+                                Đã thanh toán
                               </option>
                               <option value="CHECKED_IN" className="text-white">
                                 Đã vào
