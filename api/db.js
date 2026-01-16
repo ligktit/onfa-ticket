@@ -1,12 +1,20 @@
 // Database connection helper cho Vercel Serverless Functions
 import mongoose from 'mongoose';
+import { createRequire } from 'module';
 
-const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://onfa_admin:onfa_admin@onfa.tth2epb.mongodb.net/onfa_events?appName=ONFA";
+const require = createRequire(import.meta.url);
+const { TICKET_LIMITS } = require('../ticket-limits.cjs');
 
-let cached = global.mongoose;
+const MONGO_URI =
+  process.env.MONGO_URI ||
+  process.env.MONGODB_URI ||
+  process.env.MONGO_URL ||
+  "mongodb+srv://onfa_admin:onfa_admin@onfa.tth2epb.mongodb.net/onfa_events?appName=ONFA";
+
+let cached = globalThis.mongoose;
 
 if (!cached) {
-  cached = global.mongoose = { conn: null, promise: null };
+  cached = globalThis.mongoose = { conn: null, promise: null };
 }
 
 async function connectDB() {
@@ -15,9 +23,16 @@ async function connectDB() {
   }
 
   if (!cached.promise) {
+    if (!MONGO_URI) {
+      throw new Error('Missing MongoDB connection string (MONGO_URI)');
+    }
+
     const opts = {
       bufferCommands: false,
-      dbName: 'onfa_events'
+      dbName: 'onfa_events',
+      serverSelectionTimeoutMS: 10000,
+      connectTimeoutMS: 10000,
+      maxPoolSize: 5
     };
 
     cached.promise = mongoose.connect(MONGO_URI, opts).then((mongoose) => {
@@ -45,16 +60,11 @@ const TicketSchema = new mongoose.Schema({
   dob: String,
   tier: String,
   paymentImage: String,
+  qrCodeDataURL: String, // QR code image (Base64 Data URL)
   status: { type: String, default: 'PENDING' },
   registeredAt: { type: Date, default: Date.now }
 });
 
 const Ticket = mongoose.models.Ticket || mongoose.model('Ticket', TicketSchema);
-
-// Ticket Limits
-const TICKET_LIMITS = {
-  vvip: parseInt(process.env.VVIP_LIMIT || '5'),
-  vip: parseInt(process.env.VIP_LIMIT || '10')
-};
 
 export { connectDB, Ticket, TICKET_LIMITS };

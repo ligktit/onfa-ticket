@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Camera, CheckCircle, AlertCircle, LogOut, Scan, Search, Filter, Loader2 } from "lucide-react";
+import { Camera, CheckCircle, AlertCircle, LogOut, Scan, Search, Filter, Loader2, Upload } from "lucide-react";
 import { Html5Qrcode } from "html5-qrcode";
+import { io } from "socket.io-client";
 import { BackendAPI } from "../utils/api";
 import { TIER_CONFIG, getTierName } from "../utils/config";
 import StatCard from "../components/StatCard";
+import CheckInNotification from "../components/CheckInNotification";
 
 const AdminApp = () => {
   const navigate = useNavigate();
@@ -31,8 +33,11 @@ const AdminApp = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("ALL"); // ALL, PENDING, PAID, CHECKED_IN, CANCELLED
   const [filterTier, setFilterTier] = useState("ALL"); // ALL, vvip, vip
+  const [notificationTicket, setNotificationTicket] = useState(null); // For Socket.IO notifications
   const qrCodeRef = useRef(null);
   const html5QrCodeRef = useRef(null);
+  const socketRef = useRef(null);
+  const qrReaderContainerRef = useRef(null);
 
   const handleLogout = () => {
     localStorage.removeItem("admin_authenticated");
@@ -94,11 +99,93 @@ const AdminApp = () => {
 
   useEffect(() => {
     loadData(true); // Initial load với loading overlay
+    
+    // Auto refresh with longer interval to reduce database load
+    // Socket.IO handles real-time updates, so polling is just a backup/fallback
     const interval = setInterval(() => {
-      loadData(false); // Auto refresh không hiển thị loading overlay
-    }, 5000); // Auto refresh 5s
+      // Only refresh if Socket.IO is disconnected (as fallback)
+      // If Socket.IO is connected, it handles real-time updates, so no need to poll
+      if (!socketRef.current?.connected) {
+        console.log('⚠️ Socket.IO disconnected, refreshing data via polling...');
+        loadData(false);
+      }
+      // Otherwise, Socket.IO events will trigger loadData when needed
+    }, 60000); // Auto refresh every 60 seconds (reduced from 5s - 12x reduction in DB queries!)
+    
     return () => {
       clearInterval(interval);
+    };
+  }, []);
+
+  // Socket.IO connection for real-time check-in notifications
+  useEffect(() => {
+    // Determine Socket.IO server URL
+    // If accessed from network IP (phone), use same hostname for Socket.IO
+    let SOCKET_URL = import.meta.env.VITE_SOCKET_URL;
+    
+    if (!SOCKET_URL) {
+      if (import.meta.env.DEV) {
+        // In dev mode: if accessing from network IP, use network IP for Socket.IO
+        const hostname = window.location.hostname;
+        if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+          // Accessed from network IP (phone)
+          SOCKET_URL = `http://${hostname}:5000`;
+        } else {
+          // Accessed from localhost (computer)
+          SOCKET_URL = "http://localhost:5000";
+        }
+      } else {
+        // Production: use same origin
+        SOCKET_URL = window.location.origin;
+      }
+    }
+    
+    // Connect to Socket.IO server
+    socketRef.current = io(SOCKET_URL, {
+      transports: ['websocket', 'polling']
+    });
+
+    socketRef.current.on('connect', () => {
+      console.log('✅ Connected to Socket.IO server');
+    });
+
+    socketRef.current.on('disconnect', () => {
+      console.log('❌ Disconnected from Socket.IO server');
+    });
+
+    // Listen for check-in events
+    socketRef.current.on('ticket-checked-in', (ticketData) => {
+      console.log('📢 Received check-in notification:', ticketData);
+      // Show notification popup
+      setNotificationTicket(ticketData);
+      // Update local state instead of full refresh to reduce DB load
+      // Socket.IO event already contains updated ticket data, so update locally
+      setTickets(prevTickets => {
+        const updated = prevTickets.map(t => 
+          t.id === ticketData.ticketId ? { 
+            ...t, 
+            status: ticketData.status || 'CHECKED_IN',
+            // Update other fields if provided
+            ...(ticketData.name && { name: ticketData.name }),
+            ...(ticketData.email && { email: ticketData.email })
+          } : t
+        );
+        // Update stats locally without DB query
+        const checkedInCount = updated.filter(t => t.status === 'CHECKED_IN').length;
+        setStats(prevStats => ({
+          ...prevStats,
+          totalCheckedIn: checkedInCount
+        }));
+        return updated;
+      });
+    });
+
+    // Cleanup on unmount
+    return () => {
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
     };
   }, []);
 
@@ -117,34 +204,171 @@ const AdminApp = () => {
     };
   }, [view]);
 
+
   // QR Scanner functions
   const startQRScanner = async () => {
     try {
       setError("");
       setIsScanning(true);
       
-      const html5QrCode = new Html5Qrcode("qr-reader");
-      html5QrCodeRef.current = html5QrCode;
+      // Ensure container exists before starting
+      const containerId = "qr-reader";
+      let container = qrReaderContainerRef.current || document.getElementById(containerId);
+      if (!container) {
+        // Container doesn't exist yet, wait a bit for React to render
+        await new Promise(resolve => setTimeout(resolve, 200));
+        container = qrReaderContainerRef.current || document.getElementById(containerId);
+        if (!container) {
+          throw new Error("Container element không tồn tại. Vui lòng thử lại.");
+        }
+      }
+      
+      // Clear any existing content in container (React might have added something)
+      // But only if scanner hasn't started yet
+      if (!html5QrCodeRef.current) {
+        container.innerHTML = '';
+      }
+      
+      // Stop any existing scanner first
+      if (html5QrCodeRef.current) {
+        try {
+          await html5QrCodeRef.current.stop();
+          html5QrCodeRef.current.clear();
+        } catch (e) {
+          // Ignore if already stopped
+        }
+        html5QrCodeRef.current = null;
+      }
+      
+      // Check if camera is available
+      console.log("📷 Checking for cameras...");
+      const devices = await Html5Qrcode.getCameras();
+      console.log("📷 Available cameras:", devices);
+      
+      if (!devices || devices.length === 0) {
+        throw new Error("Không tìm thấy camera. Vui lòng kiểm tra camera của bạn.");
+      }
 
+      // Check if accessing via HTTPS (required for iOS Safari camera)
+      const isSecure = window.location.protocol === 'https:' || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      if (!isSecure && /iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+        setError("⚠️ iOS Safari yêu cầu HTTPS để sử dụng camera. Vui lòng sử dụng ngrok hoặc nhập mã vé thủ công.");
+        setIsScanning(false);
+        return;
+      }
+      
+      console.log("📷 Starting QR scanner...");
+      
+      // Wait a bit to ensure container is fully rendered by React
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      // Verify container exists and has dimensions
+      container = document.getElementById(containerId);
+      if (!container) {
+        throw new Error("Container element không tồn tại sau khi render.");
+      }
+      
+      // Ensure container has proper dimensions
+      const containerWidth = container.offsetWidth || container.clientWidth;
+      const containerHeight = container.offsetHeight || container.clientHeight;
+      
+      if (containerWidth === 0 || containerHeight === 0) {
+        console.warn("Container has zero dimensions, waiting longer...");
+        await new Promise(resolve => setTimeout(resolve, 500));
+        // Check again
+        if (container.offsetWidth === 0 || container.offsetHeight === 0) {
+          throw new Error("Container không có kích thước. Vui lòng thử lại.");
+        }
+      }
+      
+      console.log(`📷 Container dimensions: ${containerWidth}x${containerHeight}`);
+      
+      const html5QrCode = new Html5Qrcode(containerId);
+
+      // Try to start with back camera first, fallback to any camera
+      let cameraId = null;
+      try {
+        // Try to find back camera
+        const backCamera = devices.find(device => 
+          device.label.toLowerCase().includes('back') || 
+          device.label.toLowerCase().includes('rear') ||
+          device.label.toLowerCase().includes('environment')
+        );
+        cameraId = backCamera?.id || devices[0].id;
+      } catch (e) {
+        cameraId = devices[0].id;
+      }
+
+      console.log("📷 Starting camera with ID:", cameraId || "environment");
+      
       await html5QrCode.start(
-        { facingMode: "environment" },
+        cameraId || { facingMode: "environment" },
         {
           fps: 10,
           qrbox: { width: 250, height: 250 },
+          aspectRatio: 1.0,
         },
         (decodedText) => {
           // QR code scanned successfully
+          console.log("✅ QR Code scanned:", decodedText);
           setScanInput(decodedText);
           stopQRScanner();
           handleScanWithId(decodedText);
         },
         (errorMessage) => {
-          // Ignore scan errors
+          // Ignore scan errors (continuous scanning)
+          // Only log if it's not a common "not found" error
+          if (!errorMessage.includes("NotFoundException") && !errorMessage.includes("No QR code")) {
+            console.debug("QR scan error (ignored):", errorMessage);
+          }
         }
       );
+      
+      // Only set ref after scanner successfully starts
+      html5QrCodeRef.current = html5QrCode;
+      
+      // Force React to update to hide loading indicator and show video
+      // Use setTimeout to ensure video is rendered first
+      setTimeout(() => {
+        console.log("✅ Camera started successfully - video should be visible now");
+        // Check if video element exists
+        const video = container.querySelector('video');
+        if (video) {
+          console.log("✅ Video element found:", video.videoWidth, "x", video.videoHeight);
+        } else {
+          console.warn("⚠️ Video element not found in container");
+        }
+      }, 500);
     } catch (err) {
-      setError("Không thể khởi động camera. Vui lòng kiểm tra quyền truy cập camera.");
+      console.error("❌ Camera error:", err);
+      let errorMsg = "Không thể khởi động camera. ";
+      
+      const errName = err.name || "";
+      const errMessage = err.message || err.toString() || "";
+      
+      if (errName === "NotAllowedError" || errMessage.includes("permission") || errMessage.includes("Permission")) {
+        errorMsg = "⚠️ Quyền truy cập camera bị từ chối. Vui lòng:\n" +
+                   "1. Click vào biểu tượng khóa ở thanh địa chỉ\n" +
+                   "2. Cho phép truy cập camera\n" +
+                   "3. Tải lại trang và thử lại";
+      } else if (errName === "NotFoundError" || errMessage.includes("NotFound") || errMessage.includes("camera")) {
+        errorMsg = "❌ Không tìm thấy camera. Vui lòng:\n" +
+                   "1. Kiểm tra camera đã được kết nối\n" +
+                   "2. Đảm bảo không có ứng dụng khác đang sử dụng camera\n" +
+                   "3. Thử lại";
+      } else if (errName === "NotReadableError" || errMessage.includes("NotReadable")) {
+        errorMsg = "⚠️ Camera đang được sử dụng bởi ứng dụng khác. Vui lòng đóng các ứng dụng khác và thử lại.";
+      } else if (errMessage.includes("Container")) {
+        errorMsg = "Lỗi hệ thống: Container không tồn tại. Vui lòng tải lại trang.";
+      } else if (errMessage) {
+        errorMsg += errMessage;
+      } else {
+        errorMsg += "Vui lòng kiểm tra quyền truy cập camera và thử lại.";
+      }
+      
+      setError(errorMsg);
       setIsScanning(false);
+      html5QrCodeRef.current = null;
     }
   };
 
@@ -180,6 +404,126 @@ const AdminApp = () => {
       return;
     }
     await handleScanWithId(scanInput.trim());
+  };
+
+  // Handle QR code file upload (works on HTTP - no HTTPS required!)
+  // Perfect for mobile: take photo with camera or select from gallery, then scan QR code
+  const handleFileUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setError("");
+      setIsScanning(true); // Show loading state
+      setScanResult(null); // Clear previous results
+      
+      // Check if it's an image
+      if (!file.type.startsWith('image/')) {
+        setError("Vui lòng chọn file ảnh (JPG, PNG, etc.)");
+        setIsScanning(false);
+        return;
+      }
+
+      // Check file size (max 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        setError("File ảnh quá lớn. Vui lòng chọn file nhỏ hơn 10MB.");
+        setIsScanning(false);
+        return;
+      }
+
+      // Stop any active camera scanning first (required for file scanning)
+      if (html5QrCodeRef.current) {
+        try {
+          await html5QrCodeRef.current.stop();
+          html5QrCodeRef.current.clear();
+        } catch (e) {
+          // Ignore if already stopped
+        }
+        html5QrCodeRef.current = null;
+      }
+
+      // Use a dedicated hidden container for file scanning (recommended pattern)
+      const containerId = "qr-reader-file-" + Date.now();
+      
+      // Remove any existing containers to avoid conflicts
+      const existingContainers = document.querySelectorAll('[id^="qr-reader-file-"]');
+      existingContainers.forEach(el => el.remove());
+      
+      // Create hidden container (display:none, not visibility:hidden)
+      const container = Object.assign(document.createElement("div"), {
+        id: containerId,
+        style: "display:none"
+      });
+      document.body.appendChild(container);
+
+      // Create Html5Qrcode instance for file scanning
+      const html5QrCode = new Html5Qrcode(containerId);
+      
+      let decodedText = null;
+      
+      try {
+        // Scan QR code from uploaded file with timeout
+        console.log("📷 Scanning QR code from file:", file.name);
+        
+        // Add timeout to prevent infinite hanging (8 seconds)
+        const scanPromise = html5QrCode.scanFile(file, false); // showImage=false for hidden container
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error("Timeout: Quét QR code mất quá nhiều thời gian.")), 8000)
+        );
+        
+        decodedText = await Promise.race([scanPromise, timeoutPromise]);
+        
+        console.log("✅ QR Code scanned:", decodedText);
+      } finally {
+        // Always clean up the Html5Qrcode instance
+        try {
+          html5QrCode.clear();
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+        
+        // Always remove container
+        try {
+          if (container.parentNode) {
+            container.parentNode.removeChild(container);
+          }
+        } catch (e) {
+          // Ignore removal errors
+        }
+      }
+      
+      if (decodedText) {
+        // Successfully scanned QR code
+        setScanInput(decodedText);
+        // Automatically process check-in
+        await handleScanWithId(decodedText);
+      } else {
+        throw new Error("Không thể đọc QR code từ ảnh.");
+      }
+    } catch (err) {
+      console.error("QR scan error:", err);
+      let errorMsg = "Không thể đọc QR code từ ảnh.";
+      
+      const errMsg = err.message || err.toString() || "";
+      
+      if (errMsg.includes("Timeout") || errMsg.includes("timeout")) {
+        errorMsg = "Quét QR code mất quá nhiều thời gian. Vui lòng thử lại với ảnh QR code rõ hơn.";
+      } else if (errMsg.includes("No QR code") || errMsg.includes("not found") || errMsg.includes("No QR Code") || errMsg.includes("NotFoundException")) {
+        errorMsg = "Không tìm thấy QR code trong ảnh. Vui lòng chọn ảnh QR code rõ hơn hoặc thử lại.";
+      } else if (errMsg.includes("file") || errMsg.includes("File")) {
+        errorMsg = "File ảnh không hợp lệ. Vui lòng thử lại với file ảnh khác.";
+      } else if (errMsg.includes("element") || errMsg.includes("container")) {
+        errorMsg = "Lỗi hệ thống. Vui lòng thử lại.";
+      } else if (errMsg) {
+        errorMsg += " Chi tiết: " + errMsg;
+      }
+      
+      setError(errorMsg);
+    } finally {
+      setIsScanning(false);
+      // Reset file input
+      event.target.value = '';
+    }
   };
 
   const handleStatusChange = async (ticketId, newStatus) => {
@@ -328,20 +672,56 @@ const AdminApp = () => {
                 </div>
               )}
 
-              {/* QR Scanner */}
-              {isScanning && (
-                <div className="mb-4 sm:mb-6">
-                  <div className="bg-black rounded-lg p-2 sm:p-4 mb-3 sm:mb-4 relative">
-                    <div id="qr-reader" className="w-full"></div>
-                    <button
-                      onClick={stopQRScanner}
-                      className="absolute top-1 right-1 sm:top-2 sm:right-2 bg-red-500 text-white px-2 sm:px-4 py-1 sm:py-2 rounded hover:bg-red-600 text-xs sm:text-sm"
-                    >
-                      Đóng
-                    </button>
+              {/* Loading indicator for file scanning */}
+              {isScanning && !html5QrCodeRef.current && (
+                <div className="bg-blue-500/20 text-blue-100 p-3 sm:p-4 rounded mb-3 sm:mb-4 border border-blue-500/50 text-center">
+                  <div className="flex items-center justify-center gap-2">
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    <span className="text-sm sm:text-base">Đang quét QR code từ ảnh...</span>
                   </div>
                 </div>
               )}
+
+              {/* QR Scanner - Camera view */}
+              {/* Container must exist before starting scanner, so render it when isScanning is true */}
+              {isScanning && (
+                <div className="mb-4 sm:mb-6">
+                  <div className="bg-black rounded-lg p-2 sm:p-4 mb-3 sm:mb-4 relative overflow-hidden">
+                    {/* Loading indicator - shown outside container while scanner is initializing */}
+                    {!html5QrCodeRef.current && (
+                      <div className="w-full min-h-[300px] flex items-center justify-center bg-black rounded">
+                        <div className="text-white text-center">
+                          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2" />
+                          <p className="text-sm">Đang khởi động camera...</p>
+                        </div>
+                      </div>
+                    )}
+                    {/* QR Scanner container - Html5Qrcode will render video here */}
+                    {/* Keep container empty - Html5Qrcode will add its own elements */}
+                    {/* Always render container, Html5Qrcode will populate it */}
+                    <div 
+                      ref={qrReaderContainerRef}
+                      id="qr-reader" 
+                      className="w-full"
+                      style={{ 
+                        minHeight: '300px',
+                        position: 'relative',
+                        backgroundColor: '#000'
+                      }}
+                    ></div>
+                    {html5QrCodeRef.current && (
+                      <button
+                        onClick={stopQRScanner}
+                        className="absolute top-1 right-1 sm:top-2 sm:right-2 bg-red-500 text-white px-2 sm:px-4 py-1 sm:py-2 rounded hover:bg-red-600 text-xs sm:text-sm z-20 shadow-lg"
+                      >
+                        Đóng
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+              {/* Hidden container for file scanning (always present, even when camera not active) */}
+              {!isScanning && <div id="qr-reader-file" className="hidden w-0 h-0"></div>}
 
               {/* Manual Input */}
               <div className="flex flex-col sm:flex-row gap-3 mb-6">
@@ -365,6 +745,18 @@ const AdminApp = () => {
                     <Scan size={18} className="sm:w-5 sm:h-5" />
                     <span>{isScanning ? "Dừng" : "Quét QR"}</span>
                   </button>
+                  {/* File Upload Button - Works on HTTP, can upload from gallery or take photo */}
+                  <label className="px-3 sm:px-4 md:px-6 bg-blue-500 text-white rounded-lg hover:bg-blue-600 cursor-pointer flex items-center justify-center gap-1 sm:gap-2 text-sm sm:text-base py-2 sm:py-3 transition">
+                    <Upload size={18} className="sm:w-5 sm:h-5" />
+                    <span className="hidden sm:inline">Tải ảnh QR</span>
+                    <span className="sm:hidden">📷 QR</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                    />
+                  </label>
                   <button
                     onClick={handleScan}
                     className="px-4 sm:px-6 md:px-8 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-xl hover:scale-105 transition-all duration-300 text-sm sm:text-base font-semibold shadow-lg shadow-green-500/30 py-3 sm:py-3.5"
@@ -535,6 +927,7 @@ const AdminApp = () => {
                                   alt="Payment"
                                   className="w-10 h-10 sm:w-14 sm:h-14 object-cover rounded-lg border-2 border-yellow-400/50 cursor-pointer hover:opacity-80 hover:border-yellow-400 transition-all shadow-lg"
                                   onClick={() => setSelectedImage(t.paymentImage)}
+                                  loading="lazy" // Lazy load images
                                 />
                                 <button
                                   onClick={() => setSelectedImage(t.paymentImage)}
@@ -637,6 +1030,14 @@ const AdminApp = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Socket.IO Check-in Notification Popup */}
+      {notificationTicket && (
+        <CheckInNotification
+          ticket={notificationTicket}
+          onClose={() => setNotificationTicket(null)}
+        />
       )}
     </div>
   );

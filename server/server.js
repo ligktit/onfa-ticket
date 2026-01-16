@@ -7,8 +7,16 @@ const cors = require('cors');
 const bodyParser = require('body-parser');
 const nodemailer = require('nodemailer');
 const QRCode = require('qrcode');
+const { TICKET_LIMITS } = require('../ticket-limits.cjs');
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: "*", // Allow all origins in development, restrict in production
+    methods: ["GET", "POST"]
+  }
+});
 const PORT = 5000;
 
 // 1. Cấu hình để Frontend nói chuyện được với Backend
@@ -17,36 +25,31 @@ app.use(cors());
 app.use(bodyParser.json({ limit: '10mb' }));
 app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
 
-// 2. Kết nối tới MongoDB với database onfa_test
-// Database: onfa_test, Collection: tickets
+// 2. Kết nối tới MongoDB với database onfa_events
+// Database: onfa_events, Collection: tickets
 const MONGO_URI = "mongodb+srv://onfa_admin:onfa_admin@onfa.tth2epb.mongodb.net/onfa_events?appName=ONFA";
 
 mongoose.connect(MONGO_URI, {
-  dbName: 'onfa_test' // Explicitly specify database name
+  dbName: 'onfa_events' // Explicitly specify database name
 })
-  .then(() => console.log("✅ Đã kết nối thành công tới MongoDB Cloud - Database: onfa_test"))
+  .then(() => console.log("✅ Đã kết nối thành công tới MongoDB Cloud - Database: onfa_events"))
   .catch(err => console.error("❌ Lỗi kết nối MongoDB:", err));
 
 // 3. Tạo khuôn mẫu cho vé (Schema)
 const TicketSchema = new mongoose.Schema({
-  id: { type: String, unique: true },
+  id: { type: String, unique: true, index: true }, // Index for faster lookups
   name: String,
-  email: String,
+  email: { type: String, index: true }, // Index for faster email lookups
   phone: String,
   dob: String,         // Ngày sinh
-  tier: String,        // Hạng vé
+  tier: { type: String, index: true }, // Index for faster tier filtering
   paymentImage: String,// Ảnh thanh toán (Base64)
-  status: { type: String, default: 'PENDING' },
+  qrCodeDataURL: String, // QR code image (Base64 Data URL)
+  status: { type: String, default: 'PENDING', index: true }, // Index for faster status filtering
   registeredAt: { type: Date, default: Date.now }
 });
 
 const Ticket = mongoose.model('Ticket', TicketSchema);
-
-// Cấu hình số lượng vé
-const TICKET_LIMITS = {
-  vvip: 5,
-  vip: 10
-};
 
 // Cấu hình SMTP Email (có thể thay đổi bằng environment variables)
 const SMTP_CONFIG = {
@@ -62,8 +65,8 @@ const SMTP_CONFIG = {
 // Tạo transporter cho nodemailer
 const transporter = nodemailer.createTransport(SMTP_CONFIG);
 
-// Hàm gửi email vé với QR code
-const sendTicketEmail = async (ticket) => {
+// Hàm tạo và lưu QR code vào database
+const generateAndSaveQRCode = async (ticket) => {
   try {
     // Tạo QR code từ ticket ID
     const qrCodeDataURL = await QRCode.toDataURL(ticket.id, {
@@ -72,9 +75,33 @@ const sendTicketEmail = async (ticket) => {
       width: 300,
       margin: 1
     });
+    
+    // Lưu QR code vào database
+    ticket.qrCodeDataURL = qrCodeDataURL;
+    await ticket.save();
+    
+    console.log(`✅ Đã tạo và lưu QR code cho ticket ${ticket.id}`);
+    return qrCodeDataURL;
+  } catch (error) {
+    console.error(`❌ Lỗi tạo QR code cho ticket ${ticket.id}:`, error);
+    throw error;
+  }
+};
+
+// Hàm gửi email vé với QR code
+const sendTicketEmail = async (ticket) => {
+  try {
+    // Lấy QR code từ database hoặc tạo mới nếu chưa có
+    let qrCodeDataURL = ticket.qrCodeDataURL;
+    
+    if (!qrCodeDataURL) {
+      // Nếu chưa có QR code, tạo và lưu vào database
+      qrCodeDataURL = await generateAndSaveQRCode(ticket);
+    }
 
     // Tạo HTML email với QR code
     const tierName = ticket.tier === 'vvip' ? 'VIP A' : 'VIP B';
+    const qrCodeCid = `qr-${ticket.id}@onfa`;
     const emailHTML = `
       <!DOCTYPE html>
       <html>
@@ -154,7 +181,7 @@ const sendTicketEmail = async (ticket) => {
 
             <div class="qr-code">
               <p style="font-weight: bold; margin-bottom: 10px;">Mã QR Code của vé:</p>
-              <img src="${qrCodeDataURL}" alt="QR Code" />
+              <img src="cid:${qrCodeCid}" alt="QR Code" />
               <p style="margin-top: 10px; font-size: 14px; color: #666;">
                 Vui lòng trình mã QR này khi check-in tại sự kiện
               </p>
@@ -184,7 +211,9 @@ const sendTicketEmail = async (ticket) => {
         {
           filename: `QR_${ticket.id}.png`,
           content: qrCodeDataURL.split('base64,')[1],
-          encoding: 'base64'
+          encoding: 'base64',
+          cid: qrCodeCid,
+          contentDisposition: 'inline'
         }
       ]
     };
@@ -202,26 +231,74 @@ const sendTicketEmail = async (ticket) => {
 
 // API 1: Lấy thống kê vé
 app.get('/api/stats', async (req, res) => {
+  const startTime = Date.now();
   try {
-    const tickets = await Ticket.find(); // Lấy hết vé trong kho ra đếm
-    const vvipCount = tickets.filter(t => t.tier === 'vvip').length;
-    const vipCount = tickets.filter(t => t.tier === 'vip').length;
-    const checkedInCount = tickets.filter(t => t.status === 'CHECKED_IN').length;
+    console.log('📊 /api/stats called');
+    console.log(`📊 MongoDB Connection State: ${mongoose.connection.readyState}`);
+    
+    // Set CORS headers
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    
+    // Optimized: Use aggregation for stats and fetch tickets efficiently
+    // Fetch paymentImage but exclude qrCodeDataURL (only needed for emails, not dashboard)
+    const queryStartTime = Date.now();
+    
+    const [tickets, statsResult] = await Promise.all([
+      Ticket.find()
+        .select('id name email phone dob tier status registeredAt paymentImage') // Include paymentImage for dashboard thumbnails
+        .lean() // Use lean() for faster queries (returns plain JS objects, not Mongoose documents)
+        .sort({ registeredAt: -1 }), // Sort by newest first
+      Ticket.aggregate([
+        {
+          $group: {
+            _id: null,
+            vvipCount: { $sum: { $cond: [{ $eq: ['$tier', 'vvip'] }, 1, 0] } },
+            vipCount: { $sum: { $cond: [{ $eq: ['$tier', 'vip'] }, 1, 0] } },
+            checkedInCount: { $sum: { $cond: [{ $eq: ['$status', 'CHECKED_IN'] }, 1, 0] } },
+            totalRegistered: { $sum: 1 }
+          }
+        }
+      ])
+    ]);
+    
+    const queryTime = Date.now() - queryStartTime;
+    const stats = statsResult[0] || { vvipCount: 0, vipCount: 0, checkedInCount: 0, totalRegistered: 0 };
+    console.log(`📊 Found ${stats.totalRegistered} tickets in ${queryTime}ms (DB query time)`);
 
-    res.json({
+    const response = {
       tickets: tickets,
       stats: {
-        vvipCount,
-        vipCount,
+        vvipCount: stats.vvipCount,
+        vipCount: stats.vipCount,
         vvipLimit: TICKET_LIMITS.vvip,
         vipLimit: TICKET_LIMITS.vip,
-        vvipRemaining: Math.max(0, TICKET_LIMITS.vvip - vvipCount),
-        vipRemaining: Math.max(0, TICKET_LIMITS.vip - vipCount),
-        totalRegistered: tickets.length,
-        totalCheckedIn: checkedInCount
+        vvipRemaining: Math.max(0, TICKET_LIMITS.vvip - stats.vvipCount),
+        vipRemaining: Math.max(0, TICKET_LIMITS.vip - stats.vipCount),
+        totalRegistered: stats.totalRegistered,
+        totalCheckedIn: stats.checkedInCount
       }
-    });
+    };
+    
+    // Calculate response size for debugging
+    const responseSize = JSON.stringify(response).length;
+    const responseSizeKB = (responseSize / 1024).toFixed(2);
+    const responseSizeMB = (responseSize / (1024 * 1024)).toFixed(2);
+    
+    const duration = Date.now() - startTime;
+    console.log(`📊 Response sent in ${duration}ms`);
+    console.log(`📊 Response size: ${responseSizeKB} KB (${responseSizeMB} MB)`);
+    
+    // Warn if response is too large
+    if (responseSize > 5 * 1024 * 1024) { // > 5MB
+      console.warn(`⚠️ Large response size detected! Consider pagination or excluding large fields.`);
+    }
+    
+    res.json(response);
   } catch (error) {
+    const duration = Date.now() - startTime;
+    console.error(`❌ Error in /api/stats after ${duration}ms:`, error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -269,7 +346,37 @@ app.post('/api/checkin', async (req, res) => {
 
     ticket.status = 'CHECKED_IN';
     await ticket.save();
+    
+    // Emit Socket.IO event to notify all connected admin clients
+    io.emit('ticket-checked-in', {
+      ticketId: ticket.id,
+      name: ticket.name,
+      email: ticket.email,
+      phone: ticket.phone,
+      dob: ticket.dob,
+      tier: ticket.tier,
+      paymentImage: ticket.paymentImage,
+      status: ticket.status,
+      checkedInAt: new Date()
+    });
+    
     res.json(ticket);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// API 4.5: Get payment image for a specific ticket (on-demand loading)
+app.get('/api/ticket/:ticketId/image', async (req, res) => {
+  try {
+    const { ticketId } = req.params;
+    const ticket = await Ticket.findOne({ id: ticketId }).select('paymentImage');
+    
+    if (!ticket) {
+      return res.status(404).json({ message: 'Vé không tồn tại!' });
+    }
+    
+    res.json({ paymentImage: ticket.paymentImage || null });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -289,9 +396,15 @@ app.post('/api/update-status', async (req, res) => {
     ticket.status = status;
     await ticket.save();
 
-    // Nếu status là PAID, gửi email vé tới client
+    // Nếu status là PAID, tạo QR code và gửi email vé tới client
     if (status === 'PAID') {
       try {
+        // Đảm bảo QR code đã được tạo và lưu vào database
+        if (!ticket.qrCodeDataURL) {
+          await generateAndSaveQRCode(ticket);
+        }
+        
+        // Gửi email với QR code đã lưu
         await sendTicketEmail(ticket);
         console.log(`✅ Đã gửi email vé cho ticket ${ticketId}`);
       } catch (emailError) {
@@ -306,7 +419,18 @@ app.post('/api/update-status', async (req, res) => {
   }
 });
 
-// Khởi động server
-app.listen(PORT, () => {
+// Socket.IO connection handling
+io.on('connection', (socket) => {
+  console.log(`✅ Admin client connected: ${socket.id}`);
+  
+  socket.on('disconnect', () => {
+    console.log(`❌ Admin client disconnected: ${socket.id}`);
+  });
+});
+
+// Khởi động server - Listen on all network interfaces (0.0.0.0) to allow phone access
+server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server đang chạy tại: http://localhost:${PORT}`);
+  console.log(`📡 Socket.IO server đã sẵn sàng`);
+  console.log(`🌐 Network access: http://[your-ip]:${PORT}`);
 });
