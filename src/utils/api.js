@@ -110,14 +110,13 @@ export const BackendAPI = {
 
   registerTicket: async (ticketData) => {
     try {
-      const response = await fetchWithTimeout(
+      const response = await fetch(
         `${API_URL}/register`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(ticketData),
-        },
-        15000 // Timeout 15 giây cho đăng ký
+        }
       );
       
       if (!response.ok) {
