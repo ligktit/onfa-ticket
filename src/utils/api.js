@@ -372,4 +372,53 @@ export const BackendAPI = {
       throw error;
     }
   },
+
+  // Upload hình ảnh lên ImgBB và trả về URL
+  uploadImageToImgBB: async (imageFile) => {
+    try {
+      console.log(`📤 Uploading image to ImgBB...`);
+      console.log(`📁 File size: ${(imageFile.size / 1024 / 1024).toFixed(2)} MB`);
+      
+      // Tạo FormData để upload
+      const formData = new FormData();
+      formData.append('image', imageFile);
+      
+      // Upload lên ImgBB API
+      const response = await fetchWithTimeout(
+        `https://api.imgbb.com/1/upload?key=f93f5e4533afa13c52a5c34a3daab8e2`,
+        {
+          method: "POST",
+          body: formData,
+        },
+        60000 // 60 second timeout for image upload
+      );
+      
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Unknown error');
+        console.error(`❌ ImgBB upload failed. Status: ${response.status}, Body:`, errorText);
+        throw new Error(`Không thể upload hình ảnh. Vui lòng thử lại.`);
+      }
+      
+      const data = await response.json();
+      
+      if (!data.success || !data.data || !data.data.url) {
+        console.error(`❌ ImgBB response error:`, data);
+        throw new Error(`Lỗi upload hình ảnh: ${data.error?.message || 'Unknown error'}`);
+      }
+      
+      const imageUrl = data.data.url;
+      console.log(`✅ Image uploaded successfully: ${imageUrl}`);
+      return imageUrl;
+    } catch (error) {
+      console.error("❌ Lỗi uploadImageToImgBB:", error);
+      console.error("❌ Error details:", {
+        name: error.name,
+        message: error.message
+      });
+      if (isConnectionError(error)) {
+        throw new Error("Không thể kết nối đến dịch vụ upload. Vui lòng kiểm tra kết nối mạng và thử lại.");
+      }
+      throw error;
+    }
+  },
 };
