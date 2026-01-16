@@ -19,22 +19,43 @@ export default async function handler(req, res) {
   try {
     await connectDB();
     
-    const tickets = await Ticket.find();
-    const vvipCount = tickets.filter(t => t.tier === 'vvip').length;
-    const vipCount = tickets.filter(t => t.tier === 'vip').length;
-    const checkedInCount = tickets.filter(t => t.status === 'CHECKED_IN').length;
+    // Optimized: Use aggregation for stats and fetch tickets efficiently
+    // Include paymentImage for thumbnails but exclude qrCodeDataURL (only needed for emails)
+    const [tickets, statsResult] = await Promise.all([
+      Ticket.find()
+        .select('id name email phone dob tier status registeredAt paymentImage') // Include paymentImage for thumbnails
+        .lean() // Use lean() for faster queries (returns plain JS objects)
+        .sort({ registeredAt: -1 }), // Sort by newest first
+      Ticket.aggregate([
+        {
+          $group: {
+            _id: null,
+            supervipCount: { $sum: { $cond: [{ $eq: ['$tier', 'supervip'] }, 1, 0] } },
+            vvipCount: { $sum: { $cond: [{ $eq: ['$tier', 'vvip'] }, 1, 0] } },
+            vipCount: { $sum: { $cond: [{ $eq: ['$tier', 'vip'] }, 1, 0] } },
+            checkedInCount: { $sum: { $cond: [{ $eq: ['$status', 'CHECKED_IN'] }, 1, 0] } },
+            totalRegistered: { $sum: 1 }
+          }
+        }
+      ])
+    ]);
+    
+    const stats = statsResult[0] || { supervipCount: 0, vvipCount: 0, vipCount: 0, checkedInCount: 0, totalRegistered: 0 };
 
     res.json({
       tickets: tickets,
       stats: {
-        vvipCount,
-        vipCount,
+        supervipCount: stats.supervipCount,
+        vvipCount: stats.vvipCount,
+        vipCount: stats.vipCount,
+        supervipLimit: TICKET_LIMITS.supervip,
         vvipLimit: TICKET_LIMITS.vvip,
         vipLimit: TICKET_LIMITS.vip,
-        vvipRemaining: Math.max(0, TICKET_LIMITS.vvip - vvipCount),
-        vipRemaining: Math.max(0, TICKET_LIMITS.vip - vipCount),
-        totalRegistered: tickets.length,
-        totalCheckedIn: checkedInCount
+        supervipRemaining: Math.max(0, TICKET_LIMITS.supervip - stats.supervipCount),
+        vvipRemaining: Math.max(0, TICKET_LIMITS.vvip - stats.vvipCount),
+        vipRemaining: Math.max(0, TICKET_LIMITS.vip - stats.vipCount),
+        totalRegistered: stats.totalRegistered,
+        totalCheckedIn: stats.checkedInCount
       }
     });
   } catch (error) {

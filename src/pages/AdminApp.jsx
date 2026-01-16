@@ -16,10 +16,13 @@ const AdminApp = () => {
   const [tickets, setTickets] = useState([]);
   const [filteredTickets, setFilteredTickets] = useState([]);
   const [stats, setStats] = useState({
+    supervipCount: 0,
     vvipCount: 0,
     vipCount: 0,
+    supervipLimit: 0,
     vvipLimit: 0,
     vipLimit: 0,
+    supervipRemaining: 0,
     vvipRemaining: 0,
     vipRemaining: 0,
     totalRegistered: 0,
@@ -600,65 +603,88 @@ const AdminApp = () => {
       {/* Loading Overlay */}
       {isLoading && <LoadingOverlay />}
       
-      <div className={`container mx-auto px-4 sm:px-6 max-w-[1200px] py-4 sm:py-6 md:py-8 transition-all duration-300 ${
+      <div className={`container mx-auto px-4 sm:px-6 max-w-[1400px] py-4 sm:py-6 md:py-8 transition-all duration-300 ${
         isLoading ? 'opacity-30 pointer-events-none' : 'opacity-100'
       }`}>
-        <div className="text-center mb-6 sm:mb-8 relative">
-          <button
-            onClick={handleLogout}
-            className="absolute top-0 right-0 px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition flex items-center gap-1 sm:gap-2 text-xs sm:text-sm"
-          >
-            <LogOut size={16} className="sm:w-[18px] sm:h-[18px]" />
-            <span className="hidden sm:inline">Đăng xuất</span>
-            <span className="sm:hidden">X</span>
-          </button>
-          <h1 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl font-bold text-yellow-400 mb-2 px-8 sm:px-0">🔐 ADMIN PANEL</h1>
-          <p className="text-yellow-300 text-sm sm:text-base md:text-lg">Hệ thống quản lý vé sự kiện</p>
+        {/* Header Card */}
+        <div className="bg-gradient-to-br from-gray-800/90 via-gray-800/80 to-gray-900/90 backdrop-blur-xl rounded-2xl sm:rounded-3xl p-6 sm:p-8 md:p-10 border-2 border-yellow-400/60 shadow-2xl shadow-yellow-500/20 mb-6 sm:mb-8 relative overflow-hidden">
+          {/* Decorative background elements */}
+          <div className="absolute top-0 right-0 w-64 h-64 bg-yellow-400/5 rounded-full blur-3xl"></div>
+          <div className="absolute bottom-0 left-0 w-48 h-48 bg-yellow-500/5 rounded-full blur-3xl"></div>
+          
+          <div className="relative z-10">
+            {/* Main Header Content */}
+            <div className="text-center">
+              <div className="flex items-center justify-center gap-3 sm:gap-4 mb-4 sm:mb-2">
+                <div>
+                  <h1 className="text-3xl sm:text-3xl md:text-4xl lg:text-4xl font-bold bg-gradient-to-r from-yellow-400 via-yellow-500 to-yellow-400 bg-clip-text text-transparent mb-1">
+                    ONFA TICKET ADMIN PANEL
+                  </h1>
+                </div>
+              </div>
+              <p className="text-yellow-300/90 text-base sm:text-lg md:text-xl font-medium">
+                Hệ thống quản lý vé sự kiện
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* Navigation */}
-        <div className="flex justify-center gap-2 sm:gap-4 mb-6 sm:mb-8 flex-wrap">
+        <div className="flex justify-center gap-3 sm:gap-4 mb-6 sm:mb-8 flex-wrap">
           <button
             onClick={() => setView("checkin")}
-            className={`px-3 sm:px-4 md:px-6 py-2 sm:py-2.5 md:py-3 rounded-lg font-semibold transition flex items-center text-sm sm:text-base ${
+            className={`px-4 sm:px-6 md:px-8 py-2.5 sm:py-3 md:py-3.5 rounded-xl font-semibold transition-all duration-300 flex items-center gap-2 text-sm sm:text-base shadow-lg ${
               view === "checkin"
-                ? "bg-yellow-500 text-black"
-                : "bg-gray-800 text-yellow-400 hover:bg-gray-700 border border-yellow-400"
+                ? "bg-gradient-to-r from-yellow-500 to-yellow-600 text-black shadow-yellow-500/50 scale-105"
+                : "bg-gray-800/80 backdrop-blur-sm text-yellow-400 hover:bg-gray-700/80 border-2 border-yellow-400/50 hover:border-yellow-400 hover:scale-105"
             }`}
           >
-            <Camera size={18} className="sm:w-5 sm:h-5 mr-1 sm:mr-2" /> <span className="hidden sm:inline">Check-in</span><span className="sm:hidden">Check-in</span>
+            <Camera size={18} className="sm:w-5 sm:h-5" /> 
+            <span>Check-in</span>
           </button>
           <button
             onClick={() => setView("dashboard")}
-            className={`px-3 sm:px-4 md:px-6 py-2 sm:py-2.5 md:py-3 rounded-lg font-semibold transition flex items-center text-sm sm:text-base ${
+            className={`px-4 sm:px-6 md:px-8 py-2.5 sm:py-3 md:py-3.5 rounded-xl font-semibold transition-all duration-300 flex items-center gap-2 text-sm sm:text-base shadow-lg ${
               view === "dashboard"
-                ? "bg-yellow-500 text-black"
-                : "bg-gray-800 text-yellow-400 hover:bg-gray-700 border border-yellow-400"
+                ? "bg-gradient-to-r from-yellow-500 to-yellow-600 text-black shadow-yellow-500/50 scale-105"
+                : "bg-gray-800/80 backdrop-blur-sm text-yellow-400 hover:bg-gray-700/80 border-2 border-yellow-400/50 hover:border-yellow-400 hover:scale-105"
             }`}
           >
             Dashboard
+          </button>
+          <button
+            onClick={handleLogout}
+            className="px-4 sm:px-6 md:px-8 py-2.5 sm:py-3 md:py-3.5 bg-gradient-to-r from-red-600 to-red-700 text-white rounded-xl hover:from-red-700 hover:to-red-800 transition-all duration-300 flex items-center gap-2 text-sm sm:text-base font-semibold shadow-lg shadow-red-500/30 hover:shadow-xl hover:shadow-red-500/40 hover:scale-105"
+          >
+            <LogOut size={18} className="sm:w-5 sm:h-5" />
+            <span>Đăng xuất</span>
           </button>
         </div>
 
         {/* Connection Error Alert */}
         {connectionError && (
-          <div className="mb-4 sm:mb-6 bg-red-500/20 border-2 border-red-500 rounded-lg p-3 sm:p-4">
-            <div className="flex items-center gap-2 text-red-200">
-              <AlertCircle size={20} className="flex-shrink-0" />
+          <div className="mb-4 sm:mb-6 bg-gradient-to-r from-red-500/20 to-red-600/20 border-2 border-red-500/80 rounded-xl p-4 sm:p-5 backdrop-blur-sm shadow-lg shadow-red-500/20">
+            <div className="flex items-center gap-3 text-red-200">
+              <AlertCircle size={22} className="flex-shrink-0 text-red-400" />
               <p className="text-sm sm:text-base font-semibold">{connectionError}</p>
             </div>
           </div>
         )}
 
         {/* Dashboard Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 md:gap-4 mb-6 sm:mb-8">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 mb-6 sm:mb-8">
           <StatCard
-            label="VIP A Còn lại"
+            label="Vé Super VIP Còn lại"
+            value={`${stats.supervipRemaining}/${stats.supervipLimit || 0}`}
+            color="yellow"
+          />
+          <StatCard
+            label="Vé VIP Còn lại"
             value={`${stats.vvipRemaining}/${stats.vvipLimit || 0}`}
             color="yellow"
           />
           <StatCard
-            label="VIP B Còn lại"
+            label="Vé Superior Còn lại"
             value={`${stats.vipRemaining}/${stats.vipLimit || 0}`}
             color="blue"
           />
@@ -677,13 +703,19 @@ const AdminApp = () => {
         {/* Main Views */}
         <div className="transition-all">
           {view === "checkin" && (
-            <div className="bg-gray-800/90 backdrop-blur-lg rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-8 border-2 border-yellow-400 mx-auto">
-              <h2 className="text-2xl sm:text-3xl font-bold text-yellow-400 mb-4 sm:mb-6 text-center">
-                Check-in
-              </h2>
+            <div className="bg-gradient-to-br from-gray-800/95 via-gray-800/90 to-gray-900/95 backdrop-blur-xl rounded-2xl sm:rounded-3xl p-6 sm:p-8 md:p-10 border-2 border-yellow-400/80 shadow-2xl shadow-yellow-500/10 mx-auto">
+              <div className="text-center mb-6 sm:mb-8">
+                <h2 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-500 bg-clip-text text-transparent mb-2">
+                  Check-in
+                </h2>
+                <div className="h-1 w-24 sm:w-32 mx-auto bg-gradient-to-r from-transparent via-yellow-400 to-transparent rounded-full"></div>
+              </div>
               {error && (
-                <div className="bg-red-500/20 text-red-100 p-2 sm:p-3 rounded mb-3 sm:mb-4 border border-red-500/50 text-center text-sm sm:text-base">
-                  {error}
+                <div className="bg-gradient-to-r from-red-500/20 to-red-600/20 text-red-100 p-3 sm:p-4 rounded-xl mb-4 sm:mb-6 border-2 border-red-500/60 text-center text-sm sm:text-base backdrop-blur-sm shadow-lg shadow-red-500/20">
+                  <div className="flex items-center justify-center gap-2">
+                    <AlertCircle size={18} className="text-red-400" />
+                    <span className="font-semibold">{error}</span>
+                  </div>
                 </div>
               )}
 
@@ -739,27 +771,26 @@ const AdminApp = () => {
               {!isScanning && <div id="qr-reader-file" className="hidden w-0 h-0"></div>}
 
               {/* Manual Input */}
-              <div className="flex flex-col sm:flex-row gap-2 mb-4">
+              <div className="flex flex-col sm:flex-row gap-3 mb-6">
                 <input
                   type="text"
                   value={scanInput}
                   onChange={(e) => setScanInput(e.target.value)}
                   onKeyPress={(e) => e.key === "Enter" && handleScan()}
                   placeholder="Nhập mã vé hoặc quét QR code..."
-                  className="flex-1 px-3 sm:px-4 py-2 sm:py-3 rounded-lg bg-gray-700 border border-yellow-400 text-white placeholder-yellow-300 focus:outline-none focus:ring-2 focus:ring-yellow-400 text-sm sm:text-base"
+                  className="flex-1 px-4 sm:px-5 py-3 sm:py-3.5 rounded-xl bg-gray-700/80 backdrop-blur-sm border-2 border-yellow-400/50 text-white placeholder-yellow-300/70 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 text-sm sm:text-base transition-all shadow-lg"
                 />
-                <div className="flex gap-2">
+                <div className="flex gap-3">
                   <button
                     onClick={isScanning ? stopQRScanner : startQRScanner}
-                    className={`px-3 sm:px-4 md:px-6 rounded-lg transition flex items-center justify-center gap-1 sm:gap-2 text-sm sm:text-base ${
+                    className={`px-4 sm:px-6 md:px-8 rounded-xl transition-all duration-300 flex items-center justify-center gap-2 text-sm sm:text-base font-semibold shadow-lg ${
                       isScanning
-                        ? "bg-red-500 hover:bg-red-600"
-                        : "bg-yellow-500 hover:bg-yellow-400 text-black"
-                    } text-white py-2 sm:py-3`}
+                        ? "bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white shadow-red-500/30"
+                        : "bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-black shadow-yellow-500/30"
+                    } py-3 sm:py-3.5 hover:scale-105`}
                   >
                     <Scan size={18} className="sm:w-5 sm:h-5" />
-                    <span className="hidden sm:inline">{isScanning ? "Dừng" : "Quét QR"}</span>
-                    <span className="sm:hidden">{isScanning ? "Dừng" : "QR"}</span>
+                    <span>{isScanning ? "Dừng" : "Quét QR"}</span>
                   </button>
                   {/* File Upload Button - Works on HTTP, can upload from gallery or take photo */}
                   <label className="px-3 sm:px-4 md:px-6 bg-blue-500 text-white rounded-lg hover:bg-blue-600 cursor-pointer flex items-center justify-center gap-1 sm:gap-2 text-sm sm:text-base py-2 sm:py-3 transition">
@@ -775,34 +806,42 @@ const AdminApp = () => {
                   </label>
                   <button
                     onClick={handleScan}
-                    className="px-3 sm:px-4 md:px-6 bg-green-500 text-white rounded-lg hover:bg-green-600 text-sm sm:text-base py-2 sm:py-3"
+                    className="px-4 sm:px-6 md:px-8 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-xl hover:scale-105 transition-all duration-300 text-sm sm:text-base font-semibold shadow-lg shadow-green-500/30 py-3 sm:py-3.5"
                   >
-                    <span className="hidden sm:inline">Check-in</span>
-                    <span className="sm:hidden">✓</span>
+                    <span>Check-in</span>
                   </button>
                 </div>
               </div>
 
               {scanResult && (
-                <div className="bg-green-500/20 border border-green-400 rounded-lg p-6">
-                  <div className="flex justify-center mb-4">
-                    <CheckCircle size={48} className="text-green-400" />
+                <div className="bg-gradient-to-br from-green-500/20 to-green-600/10 border-2 border-green-400/80 rounded-2xl p-6 sm:p-8 backdrop-blur-sm shadow-2xl shadow-green-500/20">
+                  <div className="flex justify-center mb-6">
+                    <div className="relative">
+                      <CheckCircle size={64} className="text-green-400 animate-pulse" />
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="w-16 h-16 bg-green-400/20 rounded-full animate-ping"></div>
+                      </div>
+                    </div>
                   </div>
-                  <h3 className="text-2xl font-bold text-white text-center mb-4">
+                  <h3 className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-green-400 to-green-300 bg-clip-text text-transparent text-center mb-6">
                     Check-in Thành công!
                   </h3>
-                  <div className="bg-white/10 rounded p-4 text-white space-y-2">
-                    <p>
-                      <strong>ID:</strong> {scanResult.id}
+                  <div className="bg-white/10 backdrop-blur-sm rounded-xl p-5 sm:p-6 text-white space-y-3 border border-white/20">
+                    <p className="flex items-center gap-2">
+                      <strong className="text-green-400">ID:</strong> 
+                      <span className="font-mono">{scanResult.id}</span>
                     </p>
-                    <p>
-                      <strong>Tên:</strong> {scanResult.name}
+                    <p className="flex items-center gap-2">
+                      <strong className="text-green-400">Tên:</strong> 
+                      <span>{scanResult.name}</span>
                     </p>
-                    <p>
-                      <strong>Hạng:</strong> {getTierName(scanResult.tier)}
+                    <p className="flex items-center gap-2">
+                      <strong className="text-green-400">Hạng:</strong> 
+                      <span>{getTierName(scanResult.tier)}</span>
                     </p>
-                    <p>
-                      <strong>Ngày sinh:</strong> {scanResult.dob}
+                    <p className="flex items-center gap-2">
+                      <strong className="text-green-400">Ngày sinh:</strong> 
+                      <span>{scanResult.dob}</span>
                     </p>
                   </div>
                   {scanResult.paymentImage && (
@@ -823,35 +862,32 @@ const AdminApp = () => {
           )}
 
           {view === "dashboard" && (
-            <div className="bg-gray-800/90 backdrop-blur-lg rounded-xl sm:rounded-2xl p-4 sm:p-6 md:p-8 border-2 border-yellow-400">
-              <h2 className="text-2xl sm:text-3xl font-bold text-yellow-400 mb-4 sm:mb-6 text-center">
-                Admin Dashboard
-              </h2>
+            <div className="bg-gradient-to-br from-gray-800/95 via-gray-800/90 to-gray-900/95 backdrop-blur-xl rounded-2xl sm:rounded-3xl p-6 sm:p-8 md:p-10 border-2 border-yellow-400/80 shadow-2xl shadow-yellow-500/10">
 
               {/* Search and Filter */}
-              <div className="mb-4 sm:mb-6 space-y-3 sm:space-y-4">
-                <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 md:gap-4">
+              <div className="mb-6 sm:mb-8 space-y-4">
+                <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
                   {/* Search */}
-                  <div className="flex-1 w-full sm:min-w-[200px]">
+                  <div className="flex-1 w-full sm:min-w-[250px]">
                     <div className="relative">
-                      <Search className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 text-yellow-400" size={18} />
+                      <Search className="absolute left-3 sm:left-4 top-1/2 transform -translate-y-1/2 text-yellow-400" size={20} />
                       <input
                         type="text"
                         placeholder="Tìm kiếm..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        className="w-full pl-8 sm:pl-10 pr-3 sm:pr-4 py-2 bg-gray-700 border border-yellow-400 rounded-lg text-white placeholder-yellow-300 focus:outline-none focus:ring-2 focus:ring-yellow-400 text-sm sm:text-base"
+                        className="w-full pl-10 sm:pl-12 pr-4 py-3 bg-gray-700/80 backdrop-blur-sm border-2 border-yellow-400/50 rounded-xl text-white placeholder-yellow-300/70 focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 text-sm sm:text-base shadow-lg transition-all"
                       />
                     </div>
                   </div>
 
                   {/* Filter Status */}
                   <div className="flex items-center gap-2">
-                    <Filter className="text-yellow-400 hidden sm:block" size={18} />
+                    <Filter className="text-yellow-400 hidden sm:block" size={20} />
                     <select
                       value={filterStatus}
                       onChange={(e) => setFilterStatus(e.target.value)}
-                      className="flex-1 sm:flex-none px-3 sm:px-4 py-2 bg-gray-700 border border-yellow-400 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-yellow-400 text-sm sm:text-base"
+                      className="flex-1 sm:flex-none px-4 py-3 bg-gray-700/80 backdrop-blur-sm border-2 border-yellow-400/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 text-sm sm:text-base shadow-lg transition-all"
                     >
                       <option value="ALL">Tất cả</option>
                       <option value="PENDING">Chờ CK</option>
@@ -865,119 +901,116 @@ const AdminApp = () => {
                   <select
                     value={filterTier}
                     onChange={(e) => setFilterTier(e.target.value)}
-                    className="px-3 sm:px-4 py-2 bg-gray-700 border border-yellow-400 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-yellow-400 text-sm sm:text-base"
+                    className="px-4 py-3 bg-gray-700/80 backdrop-blur-sm border-2 border-yellow-400/50 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 text-sm sm:text-base shadow-lg transition-all"
                   >
                     <option value="ALL">Tất cả hạng</option>
-                    <option value="vvip">VIP A</option>
-                    <option value="vip">VIP B</option>
+                    <option value="supervip">Vé Super VIP</option>
+                    <option value="vvip">Vé VIP</option>
+                    <option value="vip">Vé Superior</option>
                   </select>
                 </div>
 
-                <div className="text-yellow-300 text-xs sm:text-sm">
-                  Hiển thị: {filteredTickets.length} / {tickets.length} vé
+                <div className="text-yellow-300/90 text-sm sm:text-base font-medium flex items-center gap-2">
+                  <span className="bg-yellow-400/20 px-3 py-1 rounded-lg border border-yellow-400/30">
+                    Hiển thị: <span className="font-bold text-yellow-400">{filteredTickets.length}</span> / <span className="font-bold text-yellow-400">{tickets.length}</span> vé
+                  </span>
                 </div>
               </div>
 
-              <div className="overflow-x-auto -mx-4 sm:mx-0">
+              <div className="overflow-x-auto -mx-4 sm:mx-0 rounded-xl border border-yellow-400/30">
                 <div className="inline-block min-w-full align-middle">
                   <table className="w-full text-left text-white">
-                    <thead className="border-b border-yellow-400">
+                    <thead className="bg-gradient-to-r from-yellow-500/20 to-yellow-600/10 border-b-2 border-yellow-400/50">
                       <tr>
-                        <th className="p-2 sm:p-3 text-yellow-400 text-xs sm:text-sm">ID</th>
-                        <th className="p-2 sm:p-3 text-yellow-400 text-xs sm:text-sm">Tên / Email</th>
-                        <th className="p-2 sm:p-3 text-yellow-400 text-xs sm:text-sm hidden sm:table-cell">SĐT / DOB</th>
-                        <th className="p-2 sm:p-3 text-yellow-400 text-xs sm:text-sm">Hạng</th>
-                        <th className="p-2 sm:p-3 text-yellow-400 text-xs sm:text-sm">Ảnh</th>
-                        <th className="p-2 sm:p-3 text-yellow-400 text-xs sm:text-sm">Trạng thái</th>
+                        <th className="p-3 sm:p-4 text-yellow-400 font-bold text-xs sm:text-sm uppercase tracking-wider">ID</th>
+                        <th className="p-3 sm:p-4 text-yellow-400 font-bold text-xs sm:text-sm uppercase tracking-wider">Tên / Email</th>
+                        <th className="p-3 sm:p-4 text-yellow-400 font-bold text-xs sm:text-sm uppercase tracking-wider hidden sm:table-cell">SĐT / DOB</th>
+                        <th className="p-3 sm:p-4 text-yellow-400 font-bold text-xs sm:text-sm uppercase tracking-wider">Hạng</th>
+                        <th className="p-3 sm:p-4 text-yellow-400 font-bold text-xs sm:text-sm uppercase tracking-wider">Ảnh</th>
+                        <th className="p-3 sm:p-4 text-yellow-400 font-bold text-xs sm:text-sm uppercase tracking-wider">Trạng thái</th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y divide-white/10">
                       {filteredTickets.length === 0 ? (
                         <tr>
-                          <td colSpan="6" className="p-4 sm:p-6 text-center text-gray-400 text-sm">
-                            Không tìm thấy vé nào
+                          <td colSpan="6" className="p-8 sm:p-12 text-center text-gray-400 text-sm sm:text-base">
+                            <div className="flex flex-col items-center gap-3">
+                              <AlertCircle size={48} className="text-gray-500" />
+                              <span className="font-semibold">Không tìm thấy vé nào</span>
+                            </div>
                           </td>
                         </tr>
                       ) : (
                         filteredTickets.map((t) => (
                         <tr
                           key={t.id}
-                          className="border-b border-white/10 hover:bg-white/5"
+                          className="border-b border-white/5 hover:bg-white/10 transition-all duration-200"
                         >
-                          <td className="p-2 sm:p-3 font-mono text-xs sm:text-sm break-all">{t.id}</td>
-                          <td className="p-2 sm:p-3">
-                            <div className="font-bold text-xs sm:text-sm">{t.name}</div>
-                            <div className="text-xs text-gray-300 break-all">{t.email}</div>
+                          <td className="p-3 sm:p-4 font-mono text-xs sm:text-sm break-all text-gray-200">{t.id}</td>
+                          <td className="p-3 sm:p-4">
+                            <div className="font-bold text-sm sm:text-base text-white">{t.name}</div>
+                            <div className="text-xs sm:text-sm text-gray-300 break-all mt-1">{t.email}</div>
                             <div className="text-xs text-gray-400 sm:hidden mt-1">{t.phone} • {t.dob}</div>
                           </td>
-                          <td className="p-2 sm:p-3 hidden sm:table-cell">
-                            <div className="text-sm">{t.phone}</div>
-                            <div className="text-xs text-gray-300">{t.dob}</div>
+                          <td className="p-3 sm:p-4 hidden sm:table-cell">
+                            <div className="text-sm text-gray-200">{t.phone}</div>
+                            <div className="text-xs text-gray-400 mt-1">{t.dob}</div>
                           </td>
-                          <td className="p-2 sm:p-3">
+                          <td className="p-3 sm:p-4">
                             <span
-                              className={`px-2 py-1 rounded text-xs font-semibold ${
-                                t.tier === "vvip"
-                                  ? "bg-yellow-500 text-black"
-                                  : "bg-yellow-400 text-black"
+                              className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-bold shadow-lg ${
+                                t.tier === "supervip"
+                                  ? "bg-gradient-to-r from-yellow-600 to-yellow-700 text-white"
+                                  : t.tier === "vvip"
+                                  ? "bg-gradient-to-r from-yellow-500 to-yellow-600 text-black"
+                                  : "bg-gradient-to-r from-yellow-400 to-yellow-500 text-black"
                               }`}
                             >
                               {getTierName(t.tier)}
                             </span>
                           </td>
-                          <td className="p-2 sm:p-3">
+                          <td className="p-3 sm:p-4">
                             {t.paymentImage ? (
-                              <div className="flex items-center gap-1 sm:gap-2">
+                              <div className="flex items-center gap-2">
                                 <img
                                   src={t.paymentImage}
                                   alt="Payment"
-                                  className="w-8 h-8 sm:w-12 sm:h-12 object-cover rounded border border-yellow-400 cursor-pointer hover:opacity-80 transition"
+                                  className="w-10 h-10 sm:w-14 sm:h-14 object-cover rounded-lg border-2 border-yellow-400/50 cursor-pointer hover:opacity-80 hover:border-yellow-400 transition-all shadow-lg"
                                   onClick={() => setSelectedImage(t.paymentImage)}
                                   loading="lazy" // Lazy load images
                                 />
                                 <button
                                   onClick={() => setSelectedImage(t.paymentImage)}
-                                  className="text-yellow-400 underline text-xs hover:text-yellow-300 transition hidden sm:inline"
+                                  className="text-yellow-400  text-xs sm:text-sm hover:text-yellow-300 transition hidden sm:inline font-medium"
                                 >
                                   Xem
                                 </button>
                               </div>
                             ) : (
-                              <span className="text-gray-400 text-xs sm:text-sm">-</span>
+                              <span className="text-gray-500 text-xs sm:text-sm">-</span>
                             )}
                           </td>
-                          <td className="p-2 sm:p-3">
-                            <div className="flex items-center gap-1 sm:gap-2">
-                              <select
-                                value={pendingStatusChanges[t.id] || t.status}
-                                onChange={(e) =>
-                                  handleStatusSelectChange(t.id, e.target.value)
-                                }
-                                className="bg-gray-700 text-white text-xs sm:text-sm rounded px-1 sm:px-2 py-1 border border-yellow-400 focus:ring-1 focus:ring-yellow-400 flex-1"
-                              >
-                                <option value="PENDING" className="text-white">
-                                  Chờ CK
-                                </option>
-                                <option value="PAID" className="text-white">
-                                  Đã thanh toán
-                                </option>
-                                <option value="CHECKED_IN" className="text-white">
-                                  Đã vào
-                                </option>
-                                <option value="CANCELLED" className="text-white">
-                                  Hủy
-                                </option>
-                              </select>
-                              {(pendingStatusChanges[t.id] && pendingStatusChanges[t.id] !== t.status) && (
-                                <button
-                                  onClick={() => handleApplyStatusChange(t.id)}
-                                  className="px-2 sm:px-3 py-1 bg-yellow-400 hover:bg-yellow-500 text-gray-900 text-xs sm:text-sm font-semibold rounded border border-yellow-500 transition-colors whitespace-nowrap"
-                                  title="Áp dụng thay đổi"
-                                >
-                                  Áp Dụng
-                                </button>
-                              )}
-                            </div>
+                          <td className="p-3 sm:p-4">
+                            <select
+                              value={t.status}
+                              onChange={(e) =>
+                                handleStatusChange(t.id, e.target.value)
+                              }
+                              className="bg-gray-700/80 backdrop-blur-sm text-white text-xs sm:text-sm rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 border-2 border-yellow-400/50 focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 transition-all shadow-lg hover:border-yellow-400"
+                            >
+                              <option value="PENDING" className="text-white bg-gray-800">
+                                Chờ CK
+                              </option>
+                              <option value="PAID" className="text-white bg-gray-800">
+                                Đã thanh toán
+                              </option>
+                              <option value="CHECKED_IN" className="text-white bg-gray-800">
+                                Đã vào
+                              </option>
+                              <option value="CANCELLED" className="text-white bg-gray-800">
+                                Hủy
+                              </option>
+                            </select>
                           </td>
                         </tr>
                       ))
@@ -994,43 +1027,56 @@ const AdminApp = () => {
       {/* Image Modal */}
       {selectedImage && (
         <div
-          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+          className="fixed inset-0 bg-black/90 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in duration-300"
           onClick={() => setSelectedImage(null)}
         >
-          <div className="bg-white rounded-lg max-w-4xl max-h-[90vh] overflow-auto relative">
-            <button
-              onClick={() => setSelectedImage(null)}
-              className="absolute top-4 right-4 bg-red-500 text-white rounded-full p-2 hover:bg-red-600 transition z-10"
-            >
-              ✕
-            </button>
-            <div className="p-4">
-              <h3 className="text-xl font-bold text-gray-800 mb-4">
+          <div 
+            className="bg-gradient-to-br from-gray-800 via-gray-800 to-gray-900 rounded-2xl sm:rounded-3xl max-w-5xl w-full max-h-[95vh] overflow-hidden relative border-2 border-yellow-400/60 shadow-2xl shadow-yellow-500/20 animate-in zoom-in-95 duration-300"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="bg-gradient-to-r from-yellow-500/20 to-yellow-600/10 border-b-2 border-yellow-400/50 px-6 py-4 flex items-center justify-between">
+              <h3 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-yellow-400 to-yellow-500 bg-clip-text text-transparent">
                 Hình ảnh thanh toán
               </h3>
-              <img
-                src={selectedImage}
-                alt="Payment proof"
-                className="w-full h-auto rounded-lg border border-gray-300"
-                onClick={(e) => e.stopPropagation()}
-              />
-              <div className="mt-4 flex gap-2">
-                <a
-                  href={selectedImage}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition"
+              <button
+                onClick={() => setSelectedImage(null)}
+                className="bg-gradient-to-r from-red-600 to-red-700 text-white rounded-full p-2 hover:from-red-700 hover:to-red-800 transition-all duration-300 shadow-lg shadow-red-500/30 hover:shadow-xl hover:shadow-red-500/40 hover:scale-110 z-10"
+                aria-label="Đóng"
+              >
+                <span className="text-lg font-bold">✕</span>
+              </button>
+            </div>
+
+            {/* Image Container */}
+            <div className="p-6 sm:p-8 bg-gray-900/50">
+              <div className="bg-gray-800/50 rounded-xl p-4 border-2 border-yellow-400/30 shadow-inner">
+                <img
+                  src={selectedImage}
+                  alt="Payment proof"
+                  className="w-full h-auto rounded-lg border-2 border-yellow-400/20 shadow-2xl max-h-[60vh] object-contain mx-auto"
                   onClick={(e) => e.stopPropagation()}
-                >
-                  Mở trong tab mới
-                </a>
-                <button
-                  onClick={() => setSelectedImage(null)}
-                  className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600 transition"
-                >
-                  Đóng
-                </button>
+                />
               </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="px-6 py-4 bg-gradient-to-r from-gray-800/80 to-gray-900/80 border-t-2 border-yellow-400/30 flex flex-col sm:flex-row gap-3 justify-end">
+              <a
+                href={selectedImage}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-5 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl hover:from-blue-600 hover:to-blue-700 transition-all duration-300 font-semibold shadow-lg shadow-blue-500/30 hover:shadow-xl hover:shadow-blue-500/40 hover:scale-105 text-center text-sm sm:text-base"
+                onClick={(e) => e.stopPropagation()}
+              >
+                Mở trong tab mới
+              </a>
+              <button
+                onClick={() => setSelectedImage(null)}
+                className="px-5 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-gray-600 to-gray-700 text-white rounded-xl hover:from-gray-700 hover:to-gray-800 transition-all duration-300 font-semibold shadow-lg shadow-gray-500/30 hover:shadow-xl hover:shadow-gray-500/40 hover:scale-105 text-sm sm:text-base"
+              >
+                Đóng
+              </button>
             </div>
           </div>
         </div>

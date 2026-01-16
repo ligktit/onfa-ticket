@@ -30,9 +30,12 @@ async function connectDB() {
     const opts = {
       bufferCommands: false,
       dbName: 'onfa_events',
-      serverSelectionTimeoutMS: 10000,
-      connectTimeoutMS: 10000,
-      maxPoolSize: 5
+      serverSelectionTimeoutMS: 5000, // Reduced from 10s to 5s for faster failure detection
+      connectTimeoutMS: 5000, // Reduced from 10s to 5s
+      maxPoolSize: 10, // Increased from 5 to 10 for better concurrency
+      minPoolSize: 2, // Keep minimum connections alive
+      maxIdleTimeMS: 30000, // Close idle connections after 30s
+      socketTimeoutMS: 45000 // Socket timeout
     };
 
     cached.promise = mongoose.connect(MONGO_URI, opts).then((mongoose) => {
@@ -51,18 +54,18 @@ async function connectDB() {
   return cached.conn;
 }
 
-// Ticket Schema
+// Ticket Schema with indexes for performance
 const TicketSchema = new mongoose.Schema({
-  id: { type: String, unique: true },
+  id: { type: String, unique: true, index: true },
   name: String,
-  email: String,
+  email: { type: String, index: true }, // Index for email lookups
   phone: String,
   dob: String,
-  tier: String,
+  tier: { type: String, index: true }, // Index for tier filtering
   paymentImage: String,
   qrCodeDataURL: String, // QR code image (Base64 Data URL)
-  status: { type: String, default: 'PENDING' },
-  registeredAt: { type: Date, default: Date.now }
+  status: { type: String, default: 'PENDING', index: true }, // Index for status filtering
+  registeredAt: { type: Date, default: Date.now, index: true } // Index for sorting
 });
 
 const Ticket = mongoose.models.Ticket || mongoose.model('Ticket', TicketSchema);

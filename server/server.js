@@ -57,6 +57,7 @@ const Ticket = mongoose.model('Ticket', TicketSchema);
 
 // Cấu hình số lượng vé
 const TICKET_LIMITS = {
+  supervip: 10,
   vvip: 5,
   vip: 10
 };
@@ -75,25 +76,21 @@ const SMTP_CONFIG = {
 // Tạo transporter cho nodemailer
 const transporter = nodemailer.createTransport(SMTP_CONFIG);
 
-// Hàm tạo và lưu QR code vào database
-const generateAndSaveQRCode = async (ticket) => {
+// Hàm tạo QR code từ Ticket ID (không lưu vào database vì có thể tạo lại bất cứ lúc nào)
+const generateQRCode = async (ticketId) => {
   try {
-    // Tạo QR code từ ticket ID
-    const qrCodeDataURL = await QRCode.toDataURL(ticket.id, {
+    // Tạo QR code từ ticket ID - khi scan sẽ decode ra chính Ticket ID
+    const qrCodeDataURL = await QRCode.toDataURL(ticketId, {
       errorCorrectionLevel: 'H',
       type: 'image/png',
       width: 300,
       margin: 1
     });
     
-    // Lưu QR code vào database
-    ticket.qrCodeDataURL = qrCodeDataURL;
-    await ticket.save();
-    
-    console.log(`✅ Đã tạo và lưu QR code cho ticket ${ticket.id}`);
+    console.log(`✅ Đã tạo QR code cho ticket ${ticketId}`);
     return qrCodeDataURL;
   } catch (error) {
-    console.error(`❌ Lỗi tạo QR code cho ticket ${ticket.id}:`, error);
+    console.error(`❌ Lỗi tạo QR code cho ticket ${ticketId}:`, error);
     throw error;
   }
 };
@@ -101,16 +98,12 @@ const generateAndSaveQRCode = async (ticket) => {
 // Hàm gửi email vé với QR code
 const sendTicketEmail = async (ticket) => {
   try {
-    // Lấy QR code từ database hoặc tạo mới nếu chưa có
-    let qrCodeDataURL = ticket.qrCodeDataURL;
-    
-    if (!qrCodeDataURL) {
-      // Nếu chưa có QR code, tạo và lưu vào database
-      qrCodeDataURL = await generateAndSaveQRCode(ticket);
-    }
+    // Tạo QR code từ Ticket ID (không lưu vào database)
+    // QR code được tạo từ ticket.id, khi scan sẽ decode ra chính ticket.id
+    const qrCodeDataURL = await generateQRCode(ticket.id);
 
     // Tạo HTML email với QR code
-    const tierName = ticket.tier === 'vvip' ? 'VIP A' : 'VIP B';
+    const tierName = ticket.tier === 'supervip' ? 'Super VIP' : ticket.tier === 'vvip' ? 'VIP A' : 'VIP B';
     const qrCodeCid = `qr-${ticket.id}@onfa`;
     const emailHTML = `
       <!DOCTYPE html>
@@ -264,6 +257,7 @@ app.get('/api/stats', async (req, res) => {
         {
           $group: {
             _id: null,
+            supervipCount: { $sum: { $cond: [{ $eq: ['$tier', 'supervip'] }, 1, 0] } },
             vvipCount: { $sum: { $cond: [{ $eq: ['$tier', 'vvip'] }, 1, 0] } },
             vipCount: { $sum: { $cond: [{ $eq: ['$tier', 'vip'] }, 1, 0] } },
             checkedInCount: { $sum: { $cond: [{ $eq: ['$status', 'CHECKED_IN'] }, 1, 0] } },
@@ -274,16 +268,19 @@ app.get('/api/stats', async (req, res) => {
     ]);
     
     const queryTime = Date.now() - queryStartTime;
-    const stats = statsResult[0] || { vvipCount: 0, vipCount: 0, checkedInCount: 0, totalRegistered: 0 };
+    const stats = statsResult[0] || { supervipCount: 0, vvipCount: 0, vipCount: 0, checkedInCount: 0, totalRegistered: 0 };
     console.log(`📊 Found ${stats.totalRegistered} tickets in ${queryTime}ms (DB query time)`);
 
     const response = {
       tickets: tickets,
       stats: {
+        supervipCount: stats.supervipCount,
         vvipCount: stats.vvipCount,
         vipCount: stats.vipCount,
+        supervipLimit: TICKET_LIMITS.supervip,
         vvipLimit: TICKET_LIMITS.vvip,
         vipLimit: TICKET_LIMITS.vip,
+        supervipRemaining: Math.max(0, TICKET_LIMITS.supervip - stats.supervipCount),
         vvipRemaining: Math.max(0, TICKET_LIMITS.vvip - stats.vvipCount),
         vipRemaining: Math.max(0, TICKET_LIMITS.vip - stats.vipCount),
         totalRegistered: stats.totalRegistered,
@@ -417,12 +414,7 @@ app.post('/api/update-status', async (req, res) => {
     // Nếu status là PAID, tạo QR code và gửi email vé tới client
     if (status === 'PAID') {
       try {
-        // Đảm bảo QR code đã được tạo và lưu vào database
-        if (!ticket.qrCodeDataURL) {
-          await generateAndSaveQRCode(ticket);
-        }
-        
-        // Gửi email với QR code đã lưu
+        // Gửi email với QR code (tự động tạo từ Ticket ID khi gửi email)
         await sendTicketEmail(ticket);
         console.log(`✅ Đã gửi email vé cho ticket ${ticketId}`);
       } catch (emailError) {

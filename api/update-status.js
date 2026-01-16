@@ -1,27 +1,24 @@
 import { connectDB, Ticket } from './db.js';
+import nodemailer from 'nodemailer';
 import QRCode from 'qrcode';
 import nodemailer from 'nodemailer';
 import axios from 'axios';
 
-// Hàm tạo và lưu QR code vào database
-async function generateAndSaveQRCode(ticket) {
+// Hàm tạo QR code từ Ticket ID (không lưu vào database vì có thể tạo lại bất cứ lúc nào)
+async function generateQRCode(ticketId) {
   try {
-    // Tạo QR code từ ticket ID
-    const qrCodeDataURL = await QRCode.toDataURL(ticket.id, {
+    // Tạo QR code từ ticket ID - khi scan sẽ decode ra chính Ticket ID
+    const qrCodeDataURL = await QRCode.toDataURL(ticketId, {
       errorCorrectionLevel: 'H',
       type: 'image/png',
       width: 300,
       margin: 1
     });
     
-    // Lưu QR code vào database
-    ticket.qrCodeDataURL = qrCodeDataURL;
-    await ticket.save();
-    
-    console.log(`✅ Đã tạo và lưu QR code cho ticket ${ticket.id}`);
+    console.log(`✅ Đã tạo QR code cho ticket ${ticketId}`);
     return qrCodeDataURL;
   } catch (error) {
-    console.error(`❌ Lỗi tạo QR code cho ticket ${ticket.id}:`, error);
+    console.error(`❌ Lỗi tạo QR code cho ticket ${ticketId}:`, error);
     throw error;
   }
 }
@@ -41,14 +38,11 @@ const sendTicketEmail = async (ticket) => {
     throw new Error('Missing SMTP credentials');
   }
 
-  const qrCodeDataURL = ticket.qrCodeDataURL || await QRCode.toDataURL(ticket.id, {
-    errorCorrectionLevel: 'H',
-    type: 'image/png',
-    width: 300,
-    margin: 1,
-  });
+  // Tạo QR code từ Ticket ID (không lưu vào database)
+  // QR code được tạo từ ticket.id, khi scan sẽ decode ra chính ticket.id
+  const qrCodeDataURL = await generateQRCode(ticket.id);
 
-  const tierName = ticket.tier === 'vvip' ? 'VIP A' : 'VIP B';
+  const tierName = ticket.tier === 'supervip' ? 'Super VIP' : ticket.tier === 'vvip' ? 'VIP A' : 'VIP B';
   const emailHTML = `
     <!DOCTYPE html>
     <html>
@@ -233,11 +227,7 @@ export default async function handler(req, res) {
     
     const { ticketId, status } = body;
     
-    if (!ticketId || !status) {
-      return res.status(400).json({ message: 'Missing ticketId or status' });
-    }
-    
-    // Find and update ticket
+    // Optimized: Find and update in one operation
     const ticket = await Ticket.findOneAndUpdate(
       { id: ticketId },
       { status },
@@ -248,27 +238,25 @@ export default async function handler(req, res) {
       return res.status(404).json({ message: 'Vé không tồn tại!' });
     }
 
-    // Send webhook to n8n for status change logging
-    // If PAID: append new row, if CHECKED_IN: update existing row, otherwise append
-    const action = status === 'CHECKED_IN' ? 'update' : 'append';
-    await notifyStatusChange(ticket, action);
-
-    // Nếu status là PAID, tạo QR code và gửi email vé tới client
+    // Nếu status là PAID, tạo QR code và gửi email
     if (status === 'PAID') {
       try {
-        // Đảm bảo QR code đã được tạo và lưu vào database
-        if (!ticket.qrCodeDataURL) {
-          await generateAndSaveQRCode(ticket);
-          // Reload ticket to get updated QR code
-          await ticket.save();
+        // Reload ticket từ database để đảm bảo có dữ liệu mới nhất (bao gồm status đã cập nhật)
+        const updatedTicket = await Ticket.findOne({ id: ticketId });
+        
+        if (!updatedTicket) {
+          console.error(`❌ Không tìm thấy ticket ${ticketId} sau khi cập nhật`);
+          // Vẫn trả về success vì status đã được cập nhật thành công
+          return res.json({ success: true });
         }
         
-        // Gửi email với QR code đã lưu
-        await sendTicketEmail(ticket);
-        console.log(`✅ Đã gửi email vé cho ticket ${ticketId}`);
-      } catch (emailError) {
-        console.error(`❌ Lỗi gửi email cho ticket ${ticketId}:`, emailError);
+        // Gửi email (hàm sendTicketEmail sẽ tự check và tạo QR code nếu chưa có)
+        await sendTicketEmail(updatedTicket);
+        console.log(`✅ Đã gửi email vé cho ticket ${ticketId} (QR code sẽ được tạo tự động nếu chưa có)`);
+      } catch (error) {
+        console.error(`❌ Lỗi gửi email cho ticket ${ticketId}:`, error);
         // Không throw error để không làm gián đoạn việc cập nhật status
+        // Email sẽ được gửi lại khi admin cập nhật lại status
       }
     }
 
