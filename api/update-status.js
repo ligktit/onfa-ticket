@@ -120,9 +120,7 @@ const sendTicketEmail = async (ticket) => {
           </div>
 
           <div class="qr-code">
-            <p style="font-weight: bold; margin-bottom: 10px;">Mã QR Code của vé:</p>
-            <img src="${qrCodeDataURL}" alt="QR Code" />
-            <p style="margin-top: 10px; font-size: 14px; color: #666;">
+            <p style="font-weight: bold; margin-bottom: 10px;">Mã QR Code của vé nằm trong tệp đính kèm"</p>
               Vui lòng trình mã QR này khi check-in tại sự kiện
             </p>
           </div>
