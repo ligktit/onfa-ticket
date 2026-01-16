@@ -392,9 +392,16 @@ app.get('/api/ticket/:ticketId/image', async (req, res) => {
 
 // API 4: Cập nhật trạng thái (Admin)
 app.post('/api/update-status', async (req, res) => {
+  const startTime = Date.now();
   try {
+    console.log(`🔄 /api/update-status called for ticket: ${req.body.ticketId}`);
     const { ticketId, status, tier } = req.body;
+    
+    // Find and update ticket
+    const findStartTime = Date.now();
     const ticket = await Ticket.findOne({ id: ticketId });
+    const findTime = Date.now() - findStartTime;
+    console.log(`⏱️ Ticket lookup took ${findTime}ms`);
     
     if (!ticket) {
       return res.status(404).json({ message: 'Vé không tồn tại!' });
@@ -403,31 +410,68 @@ app.post('/api/update-status', async (req, res) => {
     // Cập nhật status và/hoặc tier
     if (status) {
       ticket.status = status;
+      console.log(`📝 Updating status to: ${status}`);
     }
     if (tier) {
       ticket.tier = tier;
+      console.log(`📝 Updating tier to: ${tier}`);
     }
+    
+    const saveStartTime = Date.now();
     await ticket.save();
+    const saveTime = Date.now() - saveStartTime;
+    console.log(`⏱️ Ticket save took ${saveTime}ms`);
 
-    // Send webhook to n8n for status change logging
+    // Send webhook to n8n for status change logging (non-blocking, don't wait if slow)
     // If PAID: append new row, if CHECKED_IN: update existing row
-    const action = status === 'CHECKED_IN' ? 'update' : 'append';
-    await n8nWebhookService.notifyStatusChange(ticket, action);
+    if (status) {
+      const action = status === 'CHECKED_IN' ? 'update' : 'append';
+      const webhookStartTime = Date.now();
+      try {
+        await Promise.race([
+          n8nWebhookService.notifyStatusChange(ticket, action),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Webhook timeout')), 10000)
+          )
+        ]);
+        const webhookTime = Date.now() - webhookStartTime;
+        console.log(`⏱️ Webhook sent in ${webhookTime}ms`);
+      } catch (webhookError) {
+        console.warn(`⚠️ Webhook failed or timed out (non-critical):`, webhookError.message);
+        // Don't fail the request if webhook fails
+      }
+    }
 
     // Nếu status là PAID, tạo QR code và gửi email vé tới client
     if (status === 'PAID') {
       try {
+        console.log(`📧 Starting email send for ticket ${ticketId}...`);
+        const emailStartTime = Date.now();
+        
         // Gửi email với QR code (tự động tạo từ Ticket ID khi gửi email)
-        await sendTicketEmail(ticket);
-        console.log(`✅ Đã gửi email vé cho ticket ${ticketId}`);
+        // Set timeout cho email sending (30 seconds max)
+        await Promise.race([
+          sendTicketEmail(ticket),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Email send timeout')), 30000)
+          )
+        ]);
+        
+        const emailTime = Date.now() - emailStartTime;
+        console.log(`✅ Đã gửi email vé cho ticket ${ticketId} trong ${emailTime}ms`);
       } catch (emailError) {
-        console.error(`❌ Lỗi gửi email cho ticket ${ticketId}:`, emailError);
+        console.error(`❌ Lỗi gửi email cho ticket ${ticketId}:`, emailError.message || emailError);
         // Không throw error để không làm gián đoạn việc cập nhật status
+        // Email sẽ được gửi lại khi admin cập nhật lại status
       }
     }
 
+    const totalTime = Date.now() - startTime;
+    console.log(`✅ /api/update-status completed in ${totalTime}ms`);
     res.json({ success: true });
   } catch (error) {
+    const totalTime = Date.now() - startTime;
+    console.error(`❌ Error in /api/update-status after ${totalTime}ms:`, error);
     res.status(500).json({ message: error.message });
   }
 });

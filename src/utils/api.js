@@ -42,10 +42,15 @@ const isConnectionError = (error) => {
 };
 
 // Helper function để tạo timeout cho fetch
+// Đảm bảo request đợi server phản hồi đầy đủ, không timeout sớm
 const fetchWithTimeout = (url, options = {}, timeout = 30000) => {
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => {
+  let timeoutId = null;
+  
+  // Set timeout - chỉ abort nếu server không phản hồi trong thời gian quy định
+  timeoutId = setTimeout(() => {
     console.warn(`⏱️ Request timeout after ${timeout}ms: ${url}`);
+    console.warn(`⚠️ Server không phản hồi, đang hủy request...`);
     controller.abort();
   }, timeout);
   
@@ -54,14 +59,34 @@ const fetchWithTimeout = (url, options = {}, timeout = 30000) => {
     signal: controller.signal,
   })
     .then(response => {
-      clearTimeout(timeoutId);
+      // Clear timeout khi nhận được response (dù OK hay không OK)
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+      
+      // Log response status để debug
+      if (!response.ok) {
+        console.warn(`⚠️ Server response not OK: ${response.status} ${response.statusText} for ${url}`);
+      }
+      
       return response;
     })
     .catch(error => {
-      clearTimeout(timeoutId);
-      if (error.name === 'AbortError') {
-        throw new Error(`Request timeout: Server không phản hồi sau ${timeout/1000} giây`);
+      // Clear timeout khi có lỗi
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
       }
+      
+      // Xử lý các loại lỗi khác nhau
+      if (error.name === 'AbortError') {
+        console.error(`❌ Request aborted due to timeout: ${url}`);
+        throw new Error(`Request timeout: Server không phản hồi sau ${timeout/1000} giây. Vui lòng kiểm tra kết nối mạng và thử lại.`);
+      }
+      
+      // Log lỗi để debug
+      console.error(`❌ Fetch error for ${url}:`, error);
       throw error;
     });
 };
@@ -110,13 +135,17 @@ export const BackendAPI = {
 
   registerTicket: async (ticketData) => {
     try {
-      const response = await fetch(
+      console.log(`🔄 Registering ticket for: ${ticketData.email}`);
+      console.log(`🔗 API URL: ${API_URL}/register`);
+      
+      const response = await fetchWithTimeout(
         `${API_URL}/register`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(ticketData),
-        }
+        },
+        60000 // 60 second timeout (for large image uploads)
       );
       
       if (!response.ok) {
@@ -124,9 +153,15 @@ export const BackendAPI = {
         throw new Error(data.message || "Đăng ký thất bại");
       }
       
-      return await response.json();
+      const result = await response.json();
+      console.log(`✅ Ticket registered successfully`);
+      return result;
     } catch (error) {
-      console.error("Lỗi registerTicket:", error);
+      console.error("❌ Lỗi registerTicket:", error);
+      console.error("❌ Error details:", {
+        name: error.name,
+        message: error.message
+      });
       if (isConnectionError(error)) {
         throw new Error("Không thể kết nối đến Server. Vui lòng thử lại sau");
       }
@@ -136,6 +171,9 @@ export const BackendAPI = {
 
   checkIn: async (ticketId) => {
     try {
+      console.log(`🔄 Checking in ticket: ${ticketId}`);
+      console.log(`🔗 API URL: ${API_URL}/checkin`);
+      
       const response = await fetchWithTimeout(
         `${API_URL}/checkin`,
         {
@@ -143,7 +181,7 @@ export const BackendAPI = {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ticketId }),
         },
-        10000
+        30000 // 30 second timeout (server may send webhook)
       );
       
       if (!response.ok) {
@@ -174,7 +212,7 @@ export const BackendAPI = {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ticketId, tier: newTier }),
         },
-        10000
+        60000 // 60 second timeout (server may need time for processing)
       );
       
       if (!response.ok) {
@@ -183,7 +221,7 @@ export const BackendAPI = {
           const errorData = await response.json();
           errorMessage = errorData.message || errorMessage;
           console.error(`❌ Server error (${response.status}):`, errorData);
-        } catch (e) {
+        } catch {
           const errorText = await response.text().catch(() => '');
           console.error(`❌ Server error (${response.status}):`, errorText);
           errorMessage = errorText || `Server error: ${response.status} ${response.statusText}`;
@@ -220,7 +258,7 @@ export const BackendAPI = {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ticketId, status: newStatus, tier: newTier }),
         },
-        10000
+        60000 // 60 second timeout (server may send email if status=PAID, needs more time)
       );
       
       if (!response.ok) {
@@ -229,7 +267,7 @@ export const BackendAPI = {
           const errorData = await response.json();
           errorMessage = errorData.message || errorMessage;
           console.error(`❌ Server error (${response.status}):`, errorData);
-        } catch (e) {
+        } catch {
           const errorText = await response.text().catch(() => '');
           console.error(`❌ Server error (${response.status}):`, errorText);
           errorMessage = errorText || `Server error: ${response.status} ${response.statusText}`;
@@ -259,6 +297,9 @@ export const BackendAPI = {
       console.log(`🔄 Updating ticket ${ticketId} to status: ${newStatus}`);
       console.log(`🔗 API URL: ${API_URL}/update-status`);
       
+      // Use longer timeout if status is PAID (server needs to send email)
+      const timeout = newStatus === 'PAID' ? 60000 : 30000; // 60s for PAID (email), 30s for others
+      
       const response = await fetchWithTimeout(
         `${API_URL}/update-status`,
         {
@@ -266,7 +307,7 @@ export const BackendAPI = {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ ticketId, status: newStatus }),
         },
-        10000
+        timeout
       );
       
       if (!response.ok) {
@@ -276,7 +317,7 @@ export const BackendAPI = {
           const errorData = await response.json();
           errorMessage = errorData.message || errorMessage;
           console.error(`❌ Server error (${response.status}):`, errorData);
-        } catch (e) {
+        } catch {
           const errorText = await response.text().catch(() => '');
           console.error(`❌ Server error (${response.status}):`, errorText);
           errorMessage = errorText || `Server error: ${response.status} ${response.statusText}`;
@@ -304,13 +345,16 @@ export const BackendAPI = {
   // Lazy load payment image on-demand
   getTicketImage: async (ticketId) => {
     try {
+      console.log(`🔄 Loading image for ticket: ${ticketId}`);
+      console.log(`🔗 API URL: ${API_URL}/ticket-image`);
+      
       const response = await fetchWithTimeout(
         `${API_URL}/ticket-image?ticketId=${encodeURIComponent(ticketId)}`,
         {
           method: "GET",
           headers: { "Content-Type": "application/json" },
         },
-        10000
+        30000 // 30 second timeout (for large image downloads)
       );
       
       if (!response.ok) {
