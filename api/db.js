@@ -5,12 +5,16 @@ import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const { TICKET_LIMITS } = require('../ticket-limits.cjs');
 
-const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://onfa_admin:onfa_admin@onfa.tth2epb.mongodb.net/onfa_events?appName=ONFA";
+const MONGO_URI =
+  process.env.MONGO_URI ||
+  process.env.MONGODB_URI ||
+  process.env.MONGO_URL ||
+  "mongodb+srv://onfa_admin:onfa_admin@onfa.tth2epb.mongodb.net/onfa_events?appName=ONFA";
 
-let cached = global.mongoose;
+let cached = globalThis.mongoose;
 
 if (!cached) {
-  cached = global.mongoose = { conn: null, promise: null };
+  cached = globalThis.mongoose = { conn: null, promise: null };
 }
 
 async function connectDB() {
@@ -19,9 +23,16 @@ async function connectDB() {
   }
 
   if (!cached.promise) {
+    if (!MONGO_URI) {
+      throw new Error('Missing MongoDB connection string (MONGO_URI)');
+    }
+
     const opts = {
       bufferCommands: false,
-      dbName: 'onfa_events'
+      dbName: 'onfa_events',
+      serverSelectionTimeoutMS: 10000,
+      connectTimeoutMS: 10000,
+      maxPoolSize: 5
     };
 
     cached.promise = mongoose.connect(MONGO_URI, opts).then((mongoose) => {
