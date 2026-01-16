@@ -33,6 +33,8 @@ const AdminApp = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isScanning, setIsScanning] = useState(false);
   const [isApplyingStatus, setIsApplyingStatus] = useState(false); // Loading state for applying status changes
+  const [showConfirmation, setShowConfirmation] = useState(false); // Show confirmation popup
+  const [confirmationMessage, setConfirmationMessage] = useState(""); // Confirmation message
   const [selectedImage, setSelectedImage] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState("ALL"); // ALL, PENDING, PAID, CHECKED_IN, CANCELLED
@@ -629,6 +631,20 @@ const AdminApp = () => {
         }
         // Refresh data once after all updates
         loadData(false);
+        
+        // Show confirmation popup
+        // Check if status was changed to PAID
+        if (newStatus === 'PAID') {
+          setConfirmationMessage('Đã Xác Nhận Thanh Toán!');
+        } else {
+          setConfirmationMessage('Thay Đổi Đã Được Áp Dụng!');
+        }
+        setShowConfirmation(true);
+        
+        // Auto-hide confirmation after 3 seconds
+        setTimeout(() => {
+          setShowConfirmation(false);
+        }, 3000);
       } catch (error) {
         console.error('Error applying changes:', error);
         setError('Không thể cập nhật. Vui lòng thử lại.');
@@ -637,6 +653,25 @@ const AdminApp = () => {
       }
     }
   };
+
+  // Confirmation popup component
+  const ConfirmationPopup = () => (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center pointer-events-none">
+      <div className="bg-gradient-to-br from-gray-800 via-gray-800 to-gray-900 rounded-2xl sm:rounded-3xl p-8 sm:p-10 max-w-md mx-4 border-2 border-green-400 shadow-2xl shadow-green-500/20 animate-in zoom-in-95 duration-300 pointer-events-auto">
+        <div className="flex flex-col items-center">
+          <div className="relative mb-6">
+            <CheckCircle className="w-20 h-20 text-green-400" />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="w-12 h-12 bg-green-400/20 rounded-full animate-ping"></div>
+            </div>
+          </div>
+          <h3 className="text-xl sm:text-2xl font-bold text-green-400 mb-2 text-center">
+            {confirmationMessage}
+          </h3>
+        </div>
+      </div>
+    </div>
+  );
 
   // Loading overlay component for applying status changes
   const ApplyingStatusOverlay = () => (
@@ -690,6 +725,7 @@ const AdminApp = () => {
       {/* Loading Overlay */}
       {isLoading && <LoadingOverlay />}
       {isApplyingStatus && <ApplyingStatusOverlay />}
+      {showConfirmation && <ConfirmationPopup />}
       
       <div className={`container mx-auto px-4 sm:px-6 max-w-[1400px] py-4 sm:py-6 md:py-8 transition-all duration-300 ${
         isLoading ? 'opacity-30 pointer-events-none' : 'opacity-100'
