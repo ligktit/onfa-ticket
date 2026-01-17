@@ -239,17 +239,27 @@ const AdminApp = () => {
           console.log('📨 Parsed message:', message);
           console.log('📨 Message type:', message.type);
           
-          if (message.type === 'connected') {
-            console.log('✅ SSE connection established:', message.message);
-          } else if (message.type === 'ticket-checked-in') {
-            console.log('🎫 Processing ticket-checked-in event');
-            console.log('🎫 Event data:', message.data);
-            console.log('🎫 Calling handleTicketCheckedIn...');
-            handleTicketCheckedIn(message.data);
-            console.log('✅ handleTicketCheckedIn called');
-          } else {
-            console.log('ℹ️ Unknown message type:', message.type);
-          }
+           if (message.type === 'connected') {
+             console.log('✅ SSE connection established:', message.message);
+           } else if (message.type === 'ticket-checked-in') {
+             console.log('🎫 Processing ticket-checked-in event');
+             console.log('🎫 Event data:', message.data);
+             console.log('🎫 Calling handleTicketCheckedIn...');
+             handleTicketCheckedIn(message.data);
+             console.log('✅ handleTicketCheckedIn called');
+           } else if (message.type === 'error') {
+             console.error('❌ SSE Error from server:', message.message);
+             if (message.backendUrl) {
+               console.error('❌ Backend URL:', message.backendUrl);
+             }
+             if (message.suggestion) {
+               console.error('💡 Suggestion:', message.suggestion);
+             }
+             // Show error to user
+             setConnectionError(`SSE Error: ${message.message}${message.suggestion ? ` - ${message.suggestion}` : ''}`);
+           } else {
+             console.log('ℹ️ Unknown message type:', message.type);
+           }
           console.log('📨 ====================================\n');
         } catch (error) {
           console.error('\n❌ ===== SSE MESSAGE ERROR =====');

@@ -29,7 +29,24 @@ export default async function handler(request) {
   // Note: In Edge Runtime, env vars are available at build time
   const backendUrl = process.env.BACKEND_URL || 
                      process.env.VITE_API_URL || 
-                     'http://localhost:5000';
+                     null;
+  
+  // If no backend URL is configured, return helpful error
+  if (!backendUrl) {
+    return new Response(
+      JSON.stringify({ 
+        type: 'error', 
+        message: 'Backend URL not configured. Please set BACKEND_URL environment variable in Vercel.' 
+      }),
+      {
+        status: 500,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
+      }
+    );
+  }
   
   const backendBaseUrl = backendUrl.replace(/\/api$/, ''); // Remove /api suffix if present
   const backendSSEUrl = `${backendBaseUrl}/api/events`;
@@ -82,8 +99,21 @@ export default async function handler(request) {
             controller.enqueue(encoder.encode(chunk));
           }
         } catch (error) {
-          // Send error message to client
-          const errorMessage = `data: ${JSON.stringify({ type: 'error', message: error.message || 'Connection error' })}\n\n`;
+          // Send error message to client with more details
+          const errorDetails = {
+            type: 'error',
+            message: error.message || 'Connection error',
+            backendUrl: backendSSEUrl,
+            errorType: error.name || 'UnknownError'
+          };
+          
+          // If it's a network error, provide more helpful message
+          if (error.message?.includes('fetch') || error.message?.includes('network') || error.name === 'TypeError') {
+            errorDetails.message = `Cannot connect to backend server at ${backendBaseUrl}. Please check BACKEND_URL environment variable.`;
+            errorDetails.suggestion = 'Ensure your backend is deployed and accessible from Vercel Edge Runtime.';
+          }
+          
+          const errorMessage = `data: ${JSON.stringify(errorDetails)}\n\n`;
           try {
             controller.enqueue(encoder.encode(errorMessage));
           } catch (e) {
