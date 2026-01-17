@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Camera, CheckCircle, AlertCircle, LogOut, Scan, Search, Filter, Loader2, Upload } from "lucide-react";
 import { Html5Qrcode } from "html5-qrcode";
-import { io } from "socket.io-client";
 import { BackendAPI } from "../utils/api";
 import { TIER_CONFIG, getTierName } from "../utils/config";
 import StatCard from "../components/StatCard";
@@ -41,10 +40,20 @@ const AdminApp = () => {
   const [pendingStatusChanges, setPendingStatusChanges] = useState({}); // Track pending status changes: { ticketId: newStatus }
   const [pendingTierChanges, setPendingTierChanges] = useState({}); // Track pending tier changes: { ticketId: newTier }
   const [filterTier, setFilterTier] = useState("ALL"); // ALL, supervip, vvip, vip
-  const [notificationTicket, setNotificationTicket] = useState(null); // For Socket.IO notifications
+  const [notificationTicket, setNotificationTicket] = useState(null); // For SSE notifications
+  
+  // Debug: Log when notificationTicket changes
+  useEffect(() => {
+    if (notificationTicket) {
+      console.log('🎯 notificationTicket state changed:', notificationTicket);
+      console.log('🎯 Popup should be visible now');
+    } else {
+      console.log('🎯 notificationTicket cleared, popup hidden');
+    }
+  }, [notificationTicket]);
   const qrCodeRef = useRef(null);
   const html5QrCodeRef = useRef(null);
-  const socketRef = useRef(null);
+  const sseEventSourceRef = useRef(null); // For Server-Sent Events
   const qrReaderContainerRef = useRef(null);
 
   const handleLogout = () => {
@@ -109,18 +118,12 @@ const AdminApp = () => {
     loadData(true); // Initial load với loading overlay
     
     // Auto refresh with longer interval to reduce database load
-    // In dev: Socket.IO handles real-time updates, polling is backup/fallback
-    // In prod: Socket.IO disabled, polling is the primary update mechanism
+    // SSE handles real-time updates, polling is backup/fallback
     const interval = setInterval(() => {
-      // In production, socketRef.current is null, so always poll
-      // In development, only poll if Socket.IO is disconnected
-      if (!socketRef.current?.connected) {
-        if (import.meta.env.DEV) {
-          console.log('⚠️ Socket.IO disconnected, refreshing data via polling...');
-        }
+      // Only poll if SSE is disconnected
+      if (!sseEventSourceRef.current || sseEventSourceRef.current.readyState !== EventSource.OPEN) {
         loadData(false);
       }
-      // In dev: Socket.IO events will trigger loadData when connected
     }, 60000); // Auto refresh every 60 seconds
     
     return () => {
@@ -128,63 +131,19 @@ const AdminApp = () => {
     };
   }, []);
 
-  // Socket.IO connection for real-time check-in notifications
-  // Only enabled in development mode (production uses polling fallback)
+  // Real-time connection for check-in notifications using Server-Sent Events (SSE)
   useEffect(() => {
-    // Skip Socket.IO in production
-    if (!import.meta.env.DEV) {
-      console.log('ℹ️ Production mode: Socket.IO disabled. Using polling fallback.');
-      return;
-    }
-
-    // Determine Socket.IO server URL (dev mode only)
-    let SOCKET_URL = import.meta.env.VITE_SOCKET_URL;
-    
-    if (!SOCKET_URL) {
-      // In dev mode: if accessing from network IP, use network IP for Socket.IO
-      const hostname = window.location.hostname;
-      if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
-        // Accessed from network IP (phone)
-        SOCKET_URL = `http://${hostname}:5000`;
-      } else {
-        // Accessed from localhost (computer)
-        SOCKET_URL = "http://localhost:5000";
-      }
-    }
-    
-    console.log(`🔌 Connecting to Socket.IO server: ${SOCKET_URL}`);
-    
-    // Connect to Socket.IO server
-    socketRef.current = io(SOCKET_URL, {
-      transports: ['websocket', 'polling'],
-      reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
-      timeout: 10000
-    });
-
-    socketRef.current.on('connect', () => {
-      console.log('✅ Connected to Socket.IO server');
-      setConnectionError(''); // Clear any connection errors
-    });
-
-    socketRef.current.on('disconnect', () => {
-      console.log('❌ Disconnected from Socket.IO server');
-      console.log('⚠️ Real-time notifications disabled. Using polling fallback.');
-    });
-
-    socketRef.current.on('connect_error', (error) => {
-      console.warn('⚠️ Socket.IO connection error:', error.message);
-      console.warn('⚠️ Falling back to polling for updates.');
-    });
-
-    // Listen for check-in events
-    socketRef.current.on('ticket-checked-in', (ticketData) => {
+    const handleTicketCheckedIn = (ticketData) => {
+      console.log('\n📢 ===== CHECK-IN NOTIFICATION =====');
       console.log('📢 Received check-in notification:', ticketData);
+      console.log('📢 Ticket ID:', ticketData.ticketId);
+      console.log('📢 Setting notificationTicket state...');
+      
       // Show notification popup
       setNotificationTicket(ticketData);
+      console.log('✅ notificationTicket state set');
+      
       // Update local state instead of full refresh to reduce DB load
-      // Socket.IO event already contains updated ticket data, so update locally
       setTickets(prevTickets => {
         const updated = prevTickets.map(t => 
           t.id === ticketData.ticketId ? { 
@@ -203,15 +162,114 @@ const AdminApp = () => {
         }));
         return updated;
       });
-    });
-
-    // Cleanup on unmount
-    return () => {
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-        socketRef.current = null;
-      }
+      
+      console.log('📢 ====================================\n');
     };
+
+    // Determine API URL for SSE endpoint
+    let API_BASE_URL = import.meta.env.VITE_API_URL;
+    
+    if (!API_BASE_URL) {
+      // Auto-detect: if accessing from network IP (phone), use network IP for API
+      const hostname = window.location.hostname;
+      if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+        // Accessed from network IP (phone)
+        API_BASE_URL = `http://${hostname}:5000`;
+      } else {
+        // Accessed from localhost (computer)
+        API_BASE_URL = "http://localhost:5000";
+      }
+    } else {
+      // Remove /api suffix if present
+      API_BASE_URL = API_BASE_URL.replace(/\/api$/, '');
+    }
+    
+    const sseUrl = `${API_BASE_URL}/api/events`;
+    console.log(`\n🔌 ===== SSE CONNECTION =====`);
+    console.log(`🔌 Hostname: ${window.location.hostname}`);
+    console.log(`🔌 API_BASE_URL: ${API_BASE_URL}`);
+    console.log(`🔌 Connecting to SSE endpoint: ${sseUrl}`);
+    console.log(`🔌 ===========================\n`);
+    
+    try {
+      const eventSource = new EventSource(sseUrl);
+      sseEventSourceRef.current = eventSource;
+      
+      eventSource.onopen = () => {
+        console.log('✅ Connected to SSE server');
+        console.log('✅ SSE URL:', sseUrl);
+        console.log('✅ SSE readyState:', eventSource.readyState, '(1 = OPEN)');
+        setConnectionError(''); // Clear any connection errors
+      };
+      
+      eventSource.onerror = (error) => {
+        console.warn('⚠️ SSE connection error:', error);
+        console.warn('⚠️ SSE readyState:', eventSource.readyState);
+        // EventSource.CONNECTING = 0, EventSource.OPEN = 1, EventSource.CLOSED = 2
+        if (eventSource.readyState === EventSource.CLOSED) {
+          console.warn('⚠️ SSE connection closed. Will attempt to reconnect automatically.');
+        }
+        console.warn('⚠️ Falling back to polling for updates.');
+        // SSE will automatically reconnect, but we'll use polling as backup
+      };
+      
+      // Listen for all messages (including keepalive)
+      eventSource.onmessage = (event) => {
+        try {
+          console.log('\n📨 ===== SSE MESSAGE RECEIVED =====');
+          console.log('📨 Event type:', event.type || 'message');
+          console.log('📨 Raw event data:', event.data);
+          console.log('📨 Event object:', event);
+          
+          // Skip keepalive messages (they start with ':')
+          if (event.data && event.data.trim().startsWith(':')) {
+            console.log('💓 Keepalive message received, skipping');
+            console.log('📨 ====================================\n');
+            return;
+          }
+          
+          const message = JSON.parse(event.data);
+          console.log('📨 Parsed message:', message);
+          console.log('📨 Message type:', message.type);
+          
+          if (message.type === 'connected') {
+            console.log('✅ SSE connection established:', message.message);
+          } else if (message.type === 'ticket-checked-in') {
+            console.log('🎫 Processing ticket-checked-in event');
+            console.log('🎫 Event data:', message.data);
+            console.log('🎫 Calling handleTicketCheckedIn...');
+            handleTicketCheckedIn(message.data);
+            console.log('✅ handleTicketCheckedIn called');
+          } else {
+            console.log('ℹ️ Unknown message type:', message.type);
+          }
+          console.log('📨 ====================================\n');
+        } catch (error) {
+          console.error('\n❌ ===== SSE MESSAGE ERROR =====');
+          console.error('❌ Error parsing SSE message:', error);
+          console.error('❌ Error message:', error.message);
+          console.error('❌ Raw event data:', event.data);
+          console.error('❌ Event object:', event);
+          console.error('❌ ====================================\n');
+        }
+      };
+      
+      // Also listen for errors on the event source itself
+      eventSource.addEventListener('error', (error) => {
+        console.error('❌ EventSource error event:', error);
+      });
+      
+      // Cleanup on unmount
+      return () => {
+        if (sseEventSourceRef.current) {
+          sseEventSourceRef.current.close();
+          sseEventSourceRef.current = null;
+        }
+      };
+    } catch (error) {
+      console.error('Failed to create SSE connection:', error);
+      console.log('⚠️ Falling back to polling for updates.');
+    }
   }, []);
 
   // Initialize filteredTickets when tickets change
@@ -1225,12 +1283,49 @@ const AdminApp = () => {
         </div>
       )}
 
-      {/* Socket.IO Check-in Notification Popup */}
+      {/* Real-time Check-in Notification Popup (SSE) */}
       {notificationTicket && (
-        <CheckInNotification
-          ticket={notificationTicket}
-          onClose={() => setNotificationTicket(null)}
-        />
+        <>
+          {console.log('🎨 Rendering CheckInNotification popup with ticket:', notificationTicket)}
+          <CheckInNotification
+            ticket={notificationTicket}
+            isMainClient={(() => {
+              // Detect main client (computer/admin) vs mobile device
+              // Option 1: Check if hostname matches main client domain (from env var)
+              const mainClientDomain = import.meta.env.VITE_MAIN_CLIENT_DOMAIN;
+              if (mainClientDomain) {
+                return window.location.hostname === mainClientDomain || 
+                       window.location.hostname.includes(mainClientDomain);
+              }
+              
+              // Option 2: Check if accessing from localhost (development)
+              if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+                return true;
+              }
+              
+              // Option 3: Check if NOT a mobile device (fallback)
+              // This is less reliable but works as a fallback
+              const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+              return !isMobile;
+            })()}
+            onClose={() => {
+              console.log('🔴 Closing notification popup');
+              setNotificationTicket(null);
+            }}
+            onApprove={async (ticketId) => {
+              try {
+                // Approve the ticket - update status to CHECKED_IN (or PAID if you want to approve payment)
+                await BackendAPI.updateTicketStatus(ticketId, 'CHECKED_IN');
+                // Refresh data to show updated status
+                loadData(false);
+                console.log('✅ Ticket approved:', ticketId);
+              } catch (error) {
+                console.error('❌ Error approving ticket:', error);
+                throw error; // Re-throw to let component handle it
+              }
+            }}
+          />
+        </>
       )}
     </div>
   );

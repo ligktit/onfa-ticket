@@ -242,8 +242,8 @@ export default async function handler(req, res) {
       return res.status(404).json({ message: 'Vé không tồn tại!' });
     }
 
-    // Send webhook to n8n for status change logging (only if status changed)
-    if (status) {
+    // Send webhook to n8n for status/tier change logging (if status or tier changed)
+    if (status || tier) {
       try {
         const action = status === 'CHECKED_IN' ? 'update' : 'append';
         await notifyStatusChange(ticket, action);

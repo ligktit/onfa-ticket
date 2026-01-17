@@ -8,19 +8,15 @@ const bodyParser = require('body-parser');
 const nodemailer = require('nodemailer');
 const QRCode = require('qrcode');
 const http = require('http');
-const { Server } = require('socket.io');
 const compression = require('compression');
 const n8nWebhookService = require('./n8nWebhookService');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: "*", // Allow all origins in development, restrict in production
-    methods: ["GET", "POST"]
-  }
-});
 const PORT = 5000;
+
+// Store SSE clients for Server-Sent Events (works with Vercel and local development)
+const sseClients = new Set();
 
 // 1. Cấu hình để Frontend nói chuyện được với Backend
 app.use(compression()); // Compress responses to reduce size
@@ -357,8 +353,8 @@ app.post('/api/checkin', async (req, res) => {
     // Send webhook to n8n to UPDATE existing row (not append)
     await n8nWebhookService.notifyStatusChange(ticket, 'update');
     
-    // Emit Socket.IO event to notify all connected admin clients
-    io.emit('ticket-checked-in', {
+    // Prepare event data
+    const eventData = {
       ticketId: ticket.id,
       name: ticket.name,
       email: ticket.email,
@@ -368,7 +364,52 @@ app.post('/api/checkin', async (req, res) => {
       paymentImage: ticket.paymentImage,
       status: ticket.status,
       checkedInAt: new Date()
+    };
+    
+    // Send SSE event to all connected SSE clients
+    const sseMessage = `data: ${JSON.stringify({ type: 'ticket-checked-in', data: eventData })}\n\n`;
+    
+    console.log(`\n📨 ===== CHECK-IN EVENT =====`);
+    console.log(`📨 Ticket ID: ${ticket.id}`);
+    console.log(`📨 Connected SSE clients: ${sseClients.size}`);
+    
+    if (sseClients.size === 0) {
+      console.log(`⚠️ WARNING: No SSE clients connected! Event will not be received by any browser.`);
+      console.log(`⚠️ Make sure browsers are connected to: http://localhost:5000/api/events or http://[your-ip]:5000/api/events`);
+    } else {
+      console.log(`📨 Sending SSE event to ${sseClients.size} client(s): ticket-checked-in for ${ticket.id}`);
+    }
+    
+    let sentCount = 0;
+    sseClients.forEach((client, index) => {
+      try {
+        // Check if response is still valid before writing
+        if (!client.destroyed && client.writable) {
+          // Write the message
+          const written = client.write(sseMessage);
+          console.log(`  📝 Writing to client ${index + 1}, written: ${written}`);
+          
+          // Force flush if available (some Node.js versions)
+          if (client.flush && typeof client.flush === 'function') {
+            client.flush();
+            console.log(`  💨 Flushed client ${index + 1}`);
+          }
+          
+          sentCount++;
+          console.log(`  ✅ Sent to client ${index + 1}`);
+        } else {
+          console.log(`  ⚠️ Client ${index + 1} is closed (destroyed: ${client.destroyed}, writable: ${client.writable}), removing from set`);
+          sseClients.delete(client);
+        }
+      } catch (error) {
+        console.error(`  ❌ Error sending SSE message to client ${index + 1}:`, error.message);
+        console.error(`  ❌ Error stack:`, error.stack);
+        sseClients.delete(client);
+      }
     });
+    
+    console.log(`📨 Successfully sent to ${sentCount} out of ${sseClients.size} client(s)`);
+    console.log(`📨 ============================\n`);
     
     res.json(ticket);
   } catch (error) {
@@ -396,6 +437,16 @@ app.get('/api/ticket/:ticketId/image', async (req, res) => {
 app.post('/api/update-status', async (req, res) => {
   try {
     const { ticketId, status, tier } = req.body;
+    
+    // Validation
+    if (!ticketId) {
+      return res.status(400).json({ message: 'Missing ticketId' });
+    }
+    
+    if (!status && !tier) {
+      return res.status(400).json({ message: 'Missing status or tier' });
+    }
+    
     const ticket = await Ticket.findOne({ id: ticketId });
     
     if (!ticket) {
@@ -411,10 +462,13 @@ app.post('/api/update-status', async (req, res) => {
     }
     await ticket.save();
 
-    // Send webhook to n8n for status change logging
+    // Send webhook to n8n for status/tier change logging
     // If PAID: append new row, if CHECKED_IN: update existing row
-    const action = status === 'CHECKED_IN' ? 'update' : 'append';
-    await n8nWebhookService.notifyStatusChange(ticket, action);
+    // Trigger webhook if either status or tier changed
+    if (status || tier) {
+      const action = status === 'CHECKED_IN' ? 'update' : 'append';
+      await n8nWebhookService.notifyStatusChange(ticket, action);
+    }
 
     // Nếu status là PAID, tạo QR code và gửi email vé tới client
     if (status === 'PAID') {
@@ -435,18 +489,113 @@ app.post('/api/update-status', async (req, res) => {
 });
 
 
-// Socket.IO connection handling
-io.on('connection', (socket) => {
-  console.log(`✅ Admin client connected: ${socket.id}`);
+// Test endpoint to manually trigger SSE event (for debugging)
+app.post('/api/test-sse', (req, res) => {
+  const testData = {
+    ticketId: 'TEST123',
+    name: 'Test User',
+    email: 'test@example.com',
+    phone: '0123456789',
+    dob: '01/01/2000',
+    tier: 'vip',
+    status: 'CHECKED_IN',
+    checkedInAt: new Date()
+  };
   
-  socket.on('disconnect', () => {
-    console.log(`❌ Admin client disconnected: ${socket.id}`);
+  const sseMessage = `data: ${JSON.stringify({ type: 'ticket-checked-in', data: testData })}\n\n`;
+  
+  console.log(`🧪 Test: Sending SSE event to ${sseClients.size} client(s)`);
+  sseClients.forEach((client, index) => {
+    try {
+      if (!client.destroyed && client.writable) {
+        client.write(sseMessage);
+        console.log(`  ✅ Test event sent to client ${index + 1}`);
+      } else {
+        sseClients.delete(client);
+      }
+    } catch (error) {
+      console.error(`❌ Test: Error sending to client ${index + 1}:`, error);
+      sseClients.delete(client);
+    }
+  });
+  
+  res.json({ 
+    success: true, 
+    message: `Test SSE event sent to ${sseClients.size} client(s)`,
+    clients: sseClients.size 
+  });
+});
+
+// SSE endpoint for real-time events (works with Vercel and local development)
+app.get('/api/events', (req, res) => {
+  // Handle OPTIONS request for CORS preflight
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Cache-Control');
+    return res.status(200).end();
+  }
+  
+  // Set headers for SSE
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Headers', 'Cache-Control');
+  res.setHeader('X-Accel-Buffering', 'no'); // Disable buffering for nginx
+  
+  // Flush headers immediately
+  res.flushHeaders();
+  
+  // Send initial connection message
+  const initialMessage = `data: ${JSON.stringify({ type: 'connected', message: 'SSE connection established' })}\n\n`;
+  res.write(initialMessage);
+  
+  // Add client to set
+  sseClients.add(res);
+  
+  console.log(`✅ SSE client connected. Total clients: ${sseClients.size}`);
+  
+  // Send keepalive every 30 seconds to prevent connection timeout
+  const keepAliveInterval = setInterval(() => {
+    try {
+      if (!res.destroyed && res.writable) {
+        res.write(`: keepalive\n\n`);
+        // Flush if available
+        if (res.flush && typeof res.flush === 'function') {
+          res.flush();
+        }
+        console.log(`💓 Keepalive sent to SSE client. Total clients: ${sseClients.size}`);
+      } else {
+        console.log(`⚠️ Keepalive: Client is closed, removing from set`);
+        clearInterval(keepAliveInterval);
+        sseClients.delete(res);
+      }
+    } catch (error) {
+      console.error('❌ Error sending keepalive:', error);
+      clearInterval(keepAliveInterval);
+      sseClients.delete(res);
+    }
+  }, 30000);
+  
+  // Handle client disconnect
+  req.on('close', () => {
+    clearInterval(keepAliveInterval);
+    sseClients.delete(res);
+    console.log(`❌ SSE client disconnected. Total clients: ${sseClients.size}`);
+  });
+  
+  // Handle errors
+  res.on('error', (error) => {
+    console.error('SSE response error:', error);
+    clearInterval(keepAliveInterval);
+    sseClients.delete(res);
   });
 });
 
 // Khởi động server - Listen on all network interfaces (0.0.0.0) to allow phone access
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server đang chạy tại: http://localhost:${PORT}`);
-  console.log(`📡 Socket.IO server đã sẵn sàng`);
+  console.log(`📨 SSE endpoint đã sẵn sàng tại: /api/events`);
   console.log(`🌐 Network access: http://[your-ip]:${PORT}`);
 });

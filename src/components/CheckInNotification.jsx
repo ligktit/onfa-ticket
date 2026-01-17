@@ -1,9 +1,18 @@
-import React from "react";
-import { CheckCircle, X } from "lucide-react";
+import React, { useState } from "react";
+import { CheckCircle, X, Check } from "lucide-react";
 import { getTierName } from "../utils/config";
+import { BackendAPI } from "../utils/api";
 
-const CheckInNotification = ({ ticket, onClose }) => {
-  if (!ticket) return null;
+const CheckInNotification = ({ ticket, onClose, isMainClient = false, onApprove }) => {
+  const [isApproving, setIsApproving] = useState(false);
+  console.log('🎨 CheckInNotification component rendered, ticket:', ticket);
+  
+  if (!ticket) {
+    console.log('⚠️ CheckInNotification: No ticket provided, returning null');
+    return null;
+  }
+
+  console.log('✅ CheckInNotification: Rendering popup with ticket:', ticket.ticketId);
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4" style={{ animation: 'fadeIn 0.3s ease-in-out' }}>
@@ -73,7 +82,46 @@ const CheckInNotification = ({ ticket, onClose }) => {
         )}
 
         {/* Footer */}
-        <div className="flex justify-end">
+        <div className={`flex ${isMainClient ? 'justify-between' : 'justify-end'} gap-3`}>
+          {isMainClient && (
+            <button
+              onClick={async () => {
+                if (!ticket.ticketId) return;
+                setIsApproving(true);
+                try {
+                  // Approve check-in by updating status to CHECKED_IN (or PAID if needed)
+                  // Since ticket is already checked in, we might want to approve payment instead
+                  // For now, let's keep it as CHECKED_IN since it's already checked in
+                  if (onApprove) {
+                    await onApprove(ticket.ticketId);
+                  } else {
+                    // Fallback: update status to CHECKED_IN
+                    await BackendAPI.updateTicketStatus(ticket.ticketId, 'CHECKED_IN');
+                  }
+                  onClose();
+                } catch (error) {
+                  console.error('Error approving ticket:', error);
+                  alert('Không thể phê duyệt vé. Vui lòng thử lại.');
+                } finally {
+                  setIsApproving(false);
+                }
+              }}
+              disabled={isApproving}
+              className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {isApproving ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span>Đang xử lý...</span>
+                </>
+              ) : (
+                <>
+                  <Check size={18} />
+                  <span>Phê Duyệt</span>
+                </>
+              )}
+            </button>
+          )}
           <button
             onClick={onClose}
             className="px-6 py-2 bg-yellow-500 text-black rounded-lg hover:bg-yellow-400 font-semibold transition-colors"
