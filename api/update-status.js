@@ -104,7 +104,7 @@ const sendTicketEmail = async (ticket) => {
       <body>
         <div class="header">
           <h1 style="margin: 0; font-size: 32px;">🎉 ONFA 2026</h1>
-          <p style="margin: 10px 0 0 0; font-size: 18px; font-weight: bold;">Vé ${tierName}</p>
+          <p style="margin: 10px 0 0 0; font-size: 18px; font-weight: bold;">${tierName}</p>
         </div>
         <div class="content">
           <h2>Xin chào ${ticket.name}!</h2>
