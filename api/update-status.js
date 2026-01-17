@@ -171,6 +171,7 @@ async function notifyStatusChange(ticket, action = 'append') {
     const data = {
       event: 'ticket_status_changed',
       action: action, // 'append' or 'update'
+      shouldUpdateSheets: true, // This is an approval/status change - should update Google Sheets
       ticket: {
         id: ticket.id,
         name: ticket.name,

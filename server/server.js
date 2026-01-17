@@ -9,14 +9,27 @@ const nodemailer = require('nodemailer');
 const QRCode = require('qrcode');
 const http = require('http');
 const compression = require('compression');
+const Pusher = require('pusher');
 const n8nWebhookService = require('./n8nWebhookService');
 
 const app = express();
 const server = http.createServer(app);
 const PORT = 5000;
 
-// Store SSE clients for Server-Sent Events (works with Vercel and local development)
-const sseClients = new Set();
+// Initialize Pusher for real-time notifications
+const pusher = new Pusher({
+  appId: process.env.PUSHER_APP_ID,
+  key: process.env.PUSHER_KEY,
+  secret: process.env.PUSHER_SECRET,
+  cluster: process.env.PUSHER_CLUSTER || 'us2',
+  useTLS: true
+});
+
+// Verify Pusher is configured
+if (!process.env.PUSHER_APP_ID || !process.env.PUSHER_KEY || !process.env.PUSHER_SECRET) {
+  console.warn('⚠️ Pusher credentials not configured. Real-time notifications will not work.');
+  console.warn('⚠️ Set PUSHER_APP_ID, PUSHER_KEY, and PUSHER_SECRET environment variables.');
+}
 
 // 1. Cấu hình để Frontend nói chuyện được với Backend
 app.use(compression()); // Compress responses to reduce size
@@ -27,10 +40,10 @@ app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
 
 // 2. Kết nối tới MongoDB với database onfa_events
 // Database: onfa_events, Collection: tickets
-const MONGO_URI = "mongodb+srv://onfa_admin:onfa_admin@onfa.tth2epb.mongodb.net/onfa_events?appName=ONFA";
+const MONGO_URI = "mongodb+srv://onfa_admin:onfa_admin@onfa.tth2epb.mongodb.net/onfa_test?appName=ONFA";
 
 mongoose.connect(MONGO_URI, {
-  dbName: 'onfa_events' // Explicitly specify database name
+  dbName: 'onfa_test' // Explicitly specify database name
 })
   .then(() => console.log("✅ Đã kết nối thành công tới MongoDB Cloud - Database: onfa_events"))
   .catch(err => console.error("❌ Lỗi kết nối MongoDB:", err));
@@ -344,13 +357,14 @@ app.post('/api/checkin', async (req, res) => {
     if (!ticket) return res.status(404).json({ message: 'Vé không tồn tại!' });
     if (ticket.status === 'CHECKED_IN') return res.status(400).json({ message: 'Vé đã check-in rồi!' });
 
-    ticket.status = 'CHECKED_IN';
-    await ticket.save();
+    // Don't automatically update status - wait for approve button
+    // Status will be updated when admin clicks "Phê Duyệt" button
+    // No need to save ticket or send webhook here
     
-    // Send webhook to n8n to UPDATE existing row (not append)
-    await n8nWebhookService.notifyStatusChange(ticket, 'update');
-    
-    // Prepare event data
+    // Prepare event data (use current status, not CHECKED_IN)
+    // IMPORTANT: This is just a scan notification, NOT an approval
+    // n8n workflows should NOT update Google Sheets based on this event
+    // Only webhooks from /api/update-status should trigger Google Sheets updates
     const eventData = {
       ticketId: ticket.id,
       name: ticket.name,
@@ -359,54 +373,25 @@ app.post('/api/checkin', async (req, res) => {
       dob: ticket.dob,
       tier: ticket.tier,
       paymentImage: ticket.paymentImage,
-      status: ticket.status,
-      checkedInAt: new Date()
+      status: ticket.status, // Keep current status, don't change to CHECKED_IN yet
+      checkedInAt: new Date(),
+      isScanOnly: true, // Flag to indicate this is just a scan, not an approval
+      shouldUpdateSheets: false // Explicit flag for n8n workflows
     };
     
-    // Send SSE event to all connected SSE clients
-    const sseMessage = `data: ${JSON.stringify({ type: 'ticket-checked-in', data: eventData })}\n\n`;
-    
-    console.log(`\n📨 ===== CHECK-IN EVENT =====`);
+    // Send Pusher event to all connected clients
+    console.log(`\n📨 ===== CHECK-IN EVENT (Pusher) =====`);
     console.log(`📨 Ticket ID: ${ticket.id}`);
-    console.log(`📨 Connected SSE clients: ${sseClients.size}`);
     
-    if (sseClients.size === 0) {
-      console.log(`⚠️ WARNING: No SSE clients connected! Event will not be received by any browser.`);
-      console.log(`⚠️ Make sure browsers are connected to: http://localhost:5000/api/events or http://[your-ip]:5000/api/events`);
-    } else {
-      console.log(`📨 Sending SSE event to ${sseClients.size} client(s): ticket-checked-in for ${ticket.id}`);
+    try {
+      await pusher.trigger('check-ins', 'ticket-checked-in', eventData);
+      console.log(`✅ Successfully sent Pusher event: ticket-checked-in for ${ticket.id}`);
+    } catch (error) {
+      console.error(`❌ Error sending Pusher event:`, error);
+      console.error(`❌ Make sure Pusher credentials are configured correctly`);
     }
     
-    let sentCount = 0;
-    sseClients.forEach((client, index) => {
-      try {
-        // Check if response is still valid before writing
-        if (!client.destroyed && client.writable) {
-          // Write the message
-          const written = client.write(sseMessage);
-          console.log(`  📝 Writing to client ${index + 1}, written: ${written}`);
-          
-          // Force flush if available (some Node.js versions)
-          if (client.flush && typeof client.flush === 'function') {
-            client.flush();
-            console.log(`  💨 Flushed client ${index + 1}`);
-          }
-          
-          sentCount++;
-          console.log(`  ✅ Sent to client ${index + 1}`);
-        } else {
-          console.log(`  ⚠️ Client ${index + 1} is closed (destroyed: ${client.destroyed}, writable: ${client.writable}), removing from set`);
-          sseClients.delete(client);
-        }
-      } catch (error) {
-        console.error(`  ❌ Error sending SSE message to client ${index + 1}:`, error.message);
-        console.error(`  ❌ Error stack:`, error.stack);
-        sseClients.delete(client);
-      }
-    });
-    
-    console.log(`📨 Successfully sent to ${sentCount} out of ${sseClients.size} client(s)`);
-    console.log(`📨 ============================\n`);
+    console.log(`📨 ====================================\n`);
     
     res.json(ticket);
   } catch (error) {

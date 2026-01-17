@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Camera, CheckCircle, AlertCircle, LogOut, Scan, Search, Filter, Loader2, Upload } from "lucide-react";
 import { Html5Qrcode } from "html5-qrcode";
+import Pusher from "pusher-js";
 import { BackendAPI } from "../utils/api";
 import { TIER_CONFIG, getTierName } from "../utils/config";
 import StatCard from "../components/StatCard";
@@ -53,8 +54,8 @@ const AdminApp = () => {
   }, [notificationTicket]);
   const qrCodeRef = useRef(null);
   const html5QrCodeRef = useRef(null);
-  const sseEventSourceRef = useRef(null); // For Server-Sent Events
   const qrReaderContainerRef = useRef(null);
+  const pusherRef = useRef(null); // Pusher instance
 
   const handleLogout = () => {
     localStorage.removeItem("admin_authenticated");
@@ -116,45 +117,77 @@ const AdminApp = () => {
 
   useEffect(() => {
     loadData(true); // Initial load với loading overlay
-    
-    // Auto refresh with longer interval to reduce database load
-    // SSE handles real-time updates, polling is backup/fallback
-    const interval = setInterval(() => {
-      // Only poll if SSE is disconnected
-      if (!sseEventSourceRef.current || sseEventSourceRef.current.readyState !== EventSource.OPEN) {
-        loadData(false);
-      }
-    }, 60000); // Auto refresh every 60 seconds
-    
-    return () => {
-      clearInterval(interval);
-    };
   }, []);
 
-  // Real-time connection for check-in notifications using Server-Sent Events (SSE)
+  // Pusher real-time connection for check-in notifications
   useEffect(() => {
-    const handleTicketCheckedIn = (ticketData) => {
-      console.log('\n📢 ===== CHECK-IN NOTIFICATION =====');
-      console.log('📢 Received check-in notification:', ticketData);
-      console.log('📢 Ticket ID:', ticketData.ticketId);
-      console.log('📢 Setting notificationTicket state...');
+    // Get Pusher credentials from environment variables
+    const pusherKey = import.meta.env.VITE_PUSHER_KEY;
+    const pusherCluster = import.meta.env.VITE_PUSHER_CLUSTER || 'us2';
+    
+    if (!pusherKey) {
+      console.warn('⚠️ Pusher key not configured. Set VITE_PUSHER_KEY environment variable.');
+      setConnectionError('Pusher not configured. Real-time notifications disabled.');
+      return;
+    }
+
+    console.log('🔌 Initializing Pusher connection...');
+    console.log('🔌 Pusher Key:', pusherKey ? `${pusherKey.substring(0, 10)}...` : 'Not set');
+    console.log('🔌 Pusher Cluster:', pusherCluster);
+
+    // Initialize Pusher
+    const pusher = new Pusher(pusherKey, {
+      cluster: pusherCluster,
+      encrypted: true,
+    });
+
+    pusherRef.current = pusher;
+
+    // Subscribe to check-in channel
+    const channel = pusher.subscribe('check-ins');
+
+    // Handle successful subscription
+    channel.bind('pusher:subscription_succeeded', () => {
+      console.log('✅ Successfully subscribed to check-ins channel');
+      setConnectionError(''); // Clear any connection errors
+    });
+
+    // Handle subscription error
+    channel.bind('pusher:subscription_error', (error) => {
+      console.error('❌ Pusher subscription error:', error);
+      setConnectionError('Failed to subscribe to real-time updates');
+    });
+
+    // Listen for ticket check-in events
+    channel.bind('ticket-checked-in', (data) => {
+      console.log('\n📢 ===== CHECK-IN NOTIFICATION (Pusher) =====');
+      console.log('📢 Received check-in notification:', data);
+      console.log('📢 Ticket ID:', data.ticketId);
       
-      // Show notification popup
-      setNotificationTicket(ticketData);
-      console.log('✅ notificationTicket state set');
+      // Show notification popup (status will be current status, not CHECKED_IN yet)
+      setNotificationTicket({
+        ticketId: data.ticketId,
+        name: data.name,
+        email: data.email,
+        tier: data.tier,
+        status: data.status, // Use actual current status (PAID, PENDING, etc.)
+        dob: data.dob,
+        phone: data.phone,
+        paymentImage: data.paymentImage // Include payment image for approval
+      });
       
-      // Update local state instead of full refresh to reduce DB load
+      // Don't update local state status yet - wait for approve button
+      // Status will be updated when admin clicks "Phê Duyệt" button
+      // Just refresh the ticket data without changing status
       setTickets(prevTickets => {
         const updated = prevTickets.map(t => 
-          t.id === ticketData.ticketId ? { 
+          t.id === data.ticketId ? { 
             ...t, 
-            status: ticketData.status || 'CHECKED_IN',
-            // Update other fields if provided
-            ...(ticketData.name && { name: ticketData.name }),
-            ...(ticketData.email && { email: ticketData.email })
+            // Keep current status, don't change to CHECKED_IN until approve button is pressed
+            paymentImage: data.paymentImage || t.paymentImage
           } : t
         );
-        // Update stats locally without DB query
+        // Don't update stats yet - status hasn't changed to CHECKED_IN
         const checkedInCount = updated.filter(t => t.status === 'CHECKED_IN').length;
         setStats(prevStats => ({
           ...prevStats,
@@ -163,130 +196,34 @@ const AdminApp = () => {
         return updated;
       });
       
+      console.log('✅ Notification displayed and state updated');
       console.log('📢 ====================================\n');
-    };
+    });
 
-    // Determine API URL for SSE endpoint
-    let API_BASE_URL = import.meta.env.VITE_API_URL;
-    
-    if (!API_BASE_URL) {
-      // Auto-detect: if accessing from network IP (phone), use network IP for API
-      const hostname = window.location.hostname;
-      if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
-        // Accessed from network IP (phone)
-        API_BASE_URL = `http://${hostname}:5000`;
-      } else {
-        // Accessed from localhost (computer)
-        API_BASE_URL = "http://localhost:5000";
+    // Handle connection events
+    pusher.connection.bind('connected', () => {
+      console.log('✅ Pusher connected');
+      setConnectionError('');
+    });
+
+    pusher.connection.bind('disconnected', () => {
+      console.warn('⚠️ Pusher disconnected');
+      setConnectionError('Real-time connection lost. Reconnecting...');
+    });
+
+    pusher.connection.bind('error', (error) => {
+      console.error('❌ Pusher connection error:', error);
+      setConnectionError('Real-time connection error');
+    });
+
+    // Cleanup on unmount
+    return () => {
+      console.log('🔌 Disconnecting Pusher...');
+      if (pusherRef.current) {
+        pusherRef.current.disconnect();
+        pusherRef.current = null;
       }
-    } else {
-      // Remove /api suffix if present
-      API_BASE_URL = API_BASE_URL.replace(/\/api$/, '');
-    }
-    
-    // Use Edge Runtime endpoint if on Vercel, otherwise use backend directly
-    const isVercel = window.location.hostname.includes('vercel.app');
-    const sseUrl = isVercel 
-      ? '/api/events' // Use Edge Runtime proxy endpoint on Vercel
-      : `${API_BASE_URL}/api/events`; // Use backend directly if not on Vercel
-    
-    console.log(`\n🔌 ===== SSE CONNECTION =====`);
-    console.log(`🔌 Hostname: ${window.location.hostname}`);
-    console.log(`🔌 Is Vercel: ${isVercel}`);
-    console.log(`🔌 API_BASE_URL: ${API_BASE_URL}`);
-    console.log(`🔌 Connecting to SSE endpoint: ${sseUrl}`);
-    console.log(`🔌 ${isVercel ? 'Using Edge Runtime proxy' : 'Using direct backend connection'}`);
-    console.log(`🔌 ===========================\n`);
-    
-    try {
-      const eventSource = new EventSource(sseUrl);
-      sseEventSourceRef.current = eventSource;
-      
-      eventSource.onopen = () => {
-        console.log('✅ Connected to SSE server');
-        console.log('✅ SSE URL:', sseUrl);
-        console.log('✅ SSE readyState:', eventSource.readyState, '(1 = OPEN)');
-        setConnectionError(''); // Clear any connection errors
-      };
-      
-      eventSource.onerror = (error) => {
-        console.warn('⚠️ SSE connection error:', error);
-        console.warn('⚠️ SSE readyState:', eventSource.readyState);
-        // EventSource.CONNECTING = 0, EventSource.OPEN = 1, EventSource.CLOSED = 2
-        if (eventSource.readyState === EventSource.CLOSED) {
-          console.warn('⚠️ SSE connection closed. Will attempt to reconnect automatically.');
-        }
-        console.warn('⚠️ Falling back to polling for updates.');
-        // SSE will automatically reconnect, but we'll use polling as backup
-      };
-      
-      // Listen for all messages (including keepalive)
-      eventSource.onmessage = (event) => {
-        try {
-          console.log('\n📨 ===== SSE MESSAGE RECEIVED =====');
-          console.log('📨 Event type:', event.type || 'message');
-          console.log('📨 Raw event data:', event.data);
-          console.log('📨 Event object:', event);
-          
-          // Skip keepalive messages (they start with ':')
-          if (event.data && event.data.trim().startsWith(':')) {
-            console.log('💓 Keepalive message received, skipping');
-            console.log('📨 ====================================\n');
-            return;
-          }
-          
-          const message = JSON.parse(event.data);
-          console.log('📨 Parsed message:', message);
-          console.log('📨 Message type:', message.type);
-          
-           if (message.type === 'connected') {
-             console.log('✅ SSE connection established:', message.message);
-           } else if (message.type === 'ticket-checked-in') {
-             console.log('🎫 Processing ticket-checked-in event');
-             console.log('🎫 Event data:', message.data);
-             console.log('🎫 Calling handleTicketCheckedIn...');
-             handleTicketCheckedIn(message.data);
-             console.log('✅ handleTicketCheckedIn called');
-           } else if (message.type === 'error') {
-             console.error('❌ SSE Error from server:', message.message);
-             if (message.backendUrl) {
-               console.error('❌ Backend URL:', message.backendUrl);
-             }
-             if (message.suggestion) {
-               console.error('💡 Suggestion:', message.suggestion);
-             }
-             // Don't show SSE errors to user - only log to console
-             // setConnectionError(`SSE Error: ${message.message}${message.suggestion ? ` - ${message.suggestion}` : ''}`);
-           } else {
-             console.log('ℹ️ Unknown message type:', message.type);
-           }
-          console.log('📨 ====================================\n');
-        } catch (error) {
-          console.error('\n❌ ===== SSE MESSAGE ERROR =====');
-          console.error('❌ Error parsing SSE message:', error);
-          console.error('❌ Error message:', error.message);
-          console.error('❌ Raw event data:', event.data);
-          console.error('❌ Event object:', event);
-          console.error('❌ ====================================\n');
-        }
-      };
-      
-      // Also listen for errors on the event source itself
-      eventSource.addEventListener('error', (error) => {
-        console.error('❌ EventSource error event:', error);
-      });
-      
-      // Cleanup on unmount
-      return () => {
-        if (sseEventSourceRef.current) {
-          sseEventSourceRef.current.close();
-          sseEventSourceRef.current = null;
-        }
-      };
-    } catch (error) {
-      console.error('Failed to create SSE connection:', error);
-      console.log('⚠️ Falling back to polling for updates.');
-    }
+    };
   }, []);
 
   // Initialize filteredTickets when tickets change
