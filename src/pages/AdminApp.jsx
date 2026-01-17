@@ -255,8 +255,8 @@ const AdminApp = () => {
              if (message.suggestion) {
                console.error('💡 Suggestion:', message.suggestion);
              }
-             // Show error to user
-             setConnectionError(`SSE Error: ${message.message}${message.suggestion ? ` - ${message.suggestion}` : ''}`);
+             // Don't show SSE errors to user - only log to console
+             // setConnectionError(`SSE Error: ${message.message}${message.suggestion ? ` - ${message.suggestion}` : ''}`);
            } else {
              console.log('ℹ️ Unknown message type:', message.type);
            }
