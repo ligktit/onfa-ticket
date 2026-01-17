@@ -706,6 +706,7 @@ const RegistrationForm = ({ onSuccess }) => {
                       )}
                     </button>
                   </div>
+                  <p className="text-sm sm:text-base text-gray-600 font-medium text-center block w-full">ONFA Chain</p>
                 </div>
               </div>
             </div>
