@@ -184,11 +184,18 @@ const AdminApp = () => {
       API_BASE_URL = API_BASE_URL.replace(/\/api$/, '');
     }
     
-    const sseUrl = `${API_BASE_URL}/api/events`;
+    // Use Edge Runtime endpoint if on Vercel, otherwise use backend directly
+    const isVercel = window.location.hostname.includes('vercel.app');
+    const sseUrl = isVercel 
+      ? '/api/events' // Use Edge Runtime proxy endpoint on Vercel
+      : `${API_BASE_URL}/api/events`; // Use backend directly if not on Vercel
+    
     console.log(`\n🔌 ===== SSE CONNECTION =====`);
     console.log(`🔌 Hostname: ${window.location.hostname}`);
+    console.log(`🔌 Is Vercel: ${isVercel}`);
     console.log(`🔌 API_BASE_URL: ${API_BASE_URL}`);
     console.log(`🔌 Connecting to SSE endpoint: ${sseUrl}`);
+    console.log(`🔌 ${isVercel ? 'Using Edge Runtime proxy' : 'Using direct backend connection'}`);
     console.log(`🔌 ===========================\n`);
     
     try {
