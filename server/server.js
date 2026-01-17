@@ -62,10 +62,10 @@ app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
 
 // 2. Kết nối tới MongoDB với database onfa_events
 // Database: onfa_events, Collection: tickets
-const MONGO_URI = "mongodb+srv://onfa_admin:onfa_admin@onfa.tth2epb.mongodb.net/onfa_test?appName=ONFA";
+const MONGO_URI = "mongodb+srv://onfa_admin:onfa_admin@onfa.tth2epb.mongodb.net/onfa_events?appName=ONFA";
 
 mongoose.connect(MONGO_URI, {
-  dbName: 'onfa_test' // Explicitly specify database name
+  dbName: 'onfa_events' // Explicitly specify database name
 })
   .then(() => console.log("✅ Đã kết nối thành công tới MongoDB Cloud - Database: onfa_events"))
   .catch(err => console.error("❌ Lỗi kết nối MongoDB:", err));
