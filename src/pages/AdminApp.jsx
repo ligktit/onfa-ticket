@@ -654,6 +654,39 @@ const AdminApp = () => {
     if (newStatus || newTier) {
       setIsApplyingStatus(true);
       try {
+        // Optimistic update: Update local state immediately for better UX
+        let oldStatus = null;
+        let oldTier = null;
+        setTickets(prevTickets => {
+          return prevTickets.map(ticket => {
+            if (ticket.id === ticketId) {
+              oldStatus = ticket.status;
+              oldTier = ticket.tier;
+              const updated = { ...ticket };
+              if (newStatus) updated.status = newStatus;
+              if (newTier) updated.tier = newTier;
+              return updated;
+            }
+            return ticket;
+          });
+        });
+
+        // Update stats optimistically based on status change
+        if (newStatus && oldStatus !== newStatus) {
+          setStats(prevStats => {
+            const updated = { ...prevStats };
+            // If changing TO CHECKED_IN (from non-CHECKED_IN), increment
+            if (newStatus === 'CHECKED_IN' && oldStatus !== 'CHECKED_IN') {
+              updated.totalCheckedIn = prevStats.totalCheckedIn + 1;
+            }
+            // If changing FROM CHECKED_IN (to non-CHECKED_IN), decrement
+            else if (oldStatus === 'CHECKED_IN' && newStatus !== 'CHECKED_IN') {
+              updated.totalCheckedIn = Math.max(0, prevStats.totalCheckedIn - 1);
+            }
+            return updated;
+          });
+        }
+
         // If both status and tier are changing, update both in one API call
         if (newStatus && newTier) {
           await BackendAPI.updateTicketStatusAndTier(ticketId, newStatus, newTier);
@@ -687,8 +720,9 @@ const AdminApp = () => {
             return updated;
           });
         }
-        // Refresh data once after all updates
-        loadData(false);
+        
+        // Refresh data from server to ensure sync (this will update stats correctly)
+        await loadData(false);
         
         // Show confirmation popup
         // Check if status was changed to PAID
@@ -706,6 +740,8 @@ const AdminApp = () => {
       } catch (error) {
         console.error('Error applying changes:', error);
         setError('Không thể cập nhật. Vui lòng thử lại.');
+        // Revert optimistic update on error by reloading data
+        loadData(false);
       } finally {
         setIsApplyingStatus(false);
       }

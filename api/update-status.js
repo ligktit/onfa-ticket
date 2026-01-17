@@ -41,7 +41,8 @@ const sendTicketEmail = async (ticket) => {
   // QR code được tạo từ ticket.id, khi scan sẽ decode ra chính ticket.id
   const qrCodeDataURL = await generateQRCode(ticket.id);
 
-  const tierName = ticket.tier === 'supervip' ? 'Super VIP' : ticket.tier === 'vvip' ? 'VIP A' : 'VIP B';
+  // Tên vé theo config: supervip = "Vé Super VIP", vvip = "Vé VIP", vip = "Vé Superior"
+  const tierName = ticket.tier === 'supervip' ? 'Vé Super VIP' : ticket.tier === 'vvip' ? 'Vé VIP' : 'Vé Superior';
   const emailHTML = `
     <!DOCTYPE html>
     <html>
@@ -103,7 +104,7 @@ const sendTicketEmail = async (ticket) => {
       <body>
         <div class="header">
           <h1 style="margin: 0; font-size: 32px;">🎉 ONFA 2026</h1>
-          <p style="margin: 10px 0 0 0; font-size: 18px; font-weight: bold;">Vé ${tierName}</p>
+          <p style="margin: 10px 0 0 0; font-size: 18px; font-weight: bold;">${tierName}</p>
         </div>
         <div class="content">
           <h2>Xin chào ${ticket.name}!</h2>
@@ -120,9 +121,7 @@ const sendTicketEmail = async (ticket) => {
           </div>
 
           <div class="qr-code">
-            <p style="font-weight: bold; margin-bottom: 10px;">Mã QR Code của vé:</p>
-            <img src="${qrCodeDataURL}" alt="QR Code" />
-            <p style="margin-top: 10px; font-size: 14px; color: #666;">
+            <p style="font-weight: bold; margin-bottom: 10px;">Mã QR Code của vé nằm trong tệp đính kèm"</p>
               Vui lòng trình mã QR này khi check-in tại sự kiện
             </p>
           </div>
@@ -178,7 +177,7 @@ async function notifyStatusChange(ticket, action = 'append') {
         email: ticket.email,
         phone: ticket.phone,
         dob: ticket.dob,
-        tier: ticket.tier === 'supervip' ? 'Super VIP' : ticket.tier === 'vvip' ? 'VIP A' : 'VIP B',
+        tier: ticket.tier === 'supervip' ? 'Vé Super VIP' : ticket.tier === 'vvip' ? 'Vé VIP' : 'Vé Superior',
         status: ticket.status, // Only send current status
         registeredAt: ticket.registeredAt ? new Date(ticket.registeredAt).toISOString() : null,
         statusChangedAt: new Date().toISOString(),

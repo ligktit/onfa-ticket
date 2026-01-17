@@ -21,9 +21,11 @@ const RegistrationForm = ({ onSuccess }) => {
     email: "",
     phone: "",
     dob: "",
-    paymentImage: null,
+    paymentImage: null, // Sẽ lưu URL từ ImgBB
     tier: "vip", // Mặc định Vé Superior
   });
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [imagePreview, setImagePreview] = useState(null); // Preview local image trước khi upload
 
   // State lưu trữ thống kê vé để validate real-time (load từ API)
   const [ticketStats, setTicketStats] = useState({
@@ -110,8 +112,14 @@ const RegistrationForm = ({ onSuccess }) => {
     return "";
   };
 
-  const validatePaymentImage = (img) =>
-    img ? "" : "Vui lòng tải ảnh thanh toán";
+  const validatePaymentImage = (img) => {
+    if (!img) return "Vui lòng tải ảnh thanh toán";
+    // Kiểm tra nếu là URL hợp lệ (từ ImgBB) hoặc base64 (fallback)
+    if (typeof img === 'string' && (img.startsWith('http') || img.startsWith('data:image'))) {
+      return "";
+    }
+    return "Hình ảnh không hợp lệ";
+  };
 
   const validateTier = (tier) => {
     if (tier === "supervip" && ticketStats.supervipRemaining <= 0)
@@ -162,16 +170,45 @@ const RegistrationForm = ({ onSuccess }) => {
     setErrors((prev) => ({ ...prev, [field]: error }));
   };
 
-  const handleImageUpload = (e) => {
+  const handleImageUpload = async (e) => {
     const file = e.target.files[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        setErrors({ ...errors, paymentImage: "Ảnh quá lớn (>5MB)" });
-        return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => handleChange("paymentImage", reader.result);
-      reader.readAsDataURL(file);
+    if (!file) return;
+    
+    // Validate file size
+    if (file.size > 5 * 1024 * 1024) {
+      setErrors({ ...errors, paymentImage: "Ảnh quá lớn (>5MB)" });
+      return;
+    }
+    
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setErrors({ ...errors, paymentImage: "Vui lòng chọn file ảnh" });
+      return;
+    }
+    
+    // Clear previous errors
+    setErrors({ ...errors, paymentImage: "" });
+    
+    // Show preview immediately
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setImagePreview(reader.result);
+    };
+    reader.readAsDataURL(file);
+    
+    // Upload to ImgBB
+    setUploadingImage(true);
+    try {
+      const imageUrl = await BackendAPI.uploadImageToImgBB(file);
+      handleChange("paymentImage", imageUrl);
+      console.log("✅ Image uploaded to ImgBB:", imageUrl);
+    } catch (error) {
+      console.error("❌ Error uploading image:", error);
+      setErrors({ ...errors, paymentImage: error.message || "Không thể upload hình ảnh. Vui lòng thử lại." });
+      setImagePreview(null);
+      handleChange("paymentImage", null);
+    } finally {
+      setUploadingImage(false);
     }
   };
 
@@ -256,6 +293,7 @@ const RegistrationForm = ({ onSuccess }) => {
                   paymentImage: null,
                   tier: "vip",
                 });
+                setImagePreview(null);
                 setErrors({});
                 setTouched({});
                 setApiError("");
@@ -686,16 +724,35 @@ const RegistrationForm = ({ onSuccess }) => {
                   : "border-gray-300"
               }`}
             >
-              {formData.paymentImage ? (
+              {uploadingImage ? (
+                <div className="flex flex-col items-center gap-2">
+                  <Loader2 className="w-8 h-8 animate-spin text-yellow-500" />
+                  <p className="text-sm text-gray-600">Đang upload hình ảnh...</p>
+                  {imagePreview && (
+                    <img
+                      src={imagePreview}
+                      alt="Preview"
+                      className="h-32 object-contain rounded opacity-50"
+                    />
+                  )}
+                </div>
+              ) : formData.paymentImage ? (
                 <div className="relative inline-block">
                   <img
                     src={formData.paymentImage}
                     alt="Payment"
                     className="h-32 object-contain rounded"
+                    onError={(e) => {
+                      console.error("Failed to load image:", formData.paymentImage);
+                      e.target.style.display = "none";
+                    }}
                   />
                   <button
                     type="button"
-                    onClick={() => handleChange("paymentImage", null)}
+                    onClick={() => {
+                      handleChange("paymentImage", null);
+                      setImagePreview(null);
+                    }}
                     className="block w-full mt-2 text-red-600 text-sm hover:underline"
                   >
                     Xóa ảnh
