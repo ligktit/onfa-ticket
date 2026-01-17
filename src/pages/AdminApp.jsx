@@ -41,17 +41,30 @@ const AdminApp = () => {
   const [pendingStatusChanges, setPendingStatusChanges] = useState({}); // Track pending status changes: { ticketId: newStatus }
   const [pendingTierChanges, setPendingTierChanges] = useState({}); // Track pending tier changes: { ticketId: newTier }
   const [filterTier, setFilterTier] = useState("ALL"); // ALL, supervip, vvip, vip
-  const [notificationTicket, setNotificationTicket] = useState(null); // For SSE notifications
+  const [notificationQueue, setNotificationQueue] = useState([]); // Queue of notifications (FIFO - oldest first)
+  const [currentNotification, setCurrentNotification] = useState(null); // Currently displayed notification
   
-  // Debug: Log when notificationTicket changes
+  // Process queue: show oldest notification first
   useEffect(() => {
-    if (notificationTicket) {
-      console.log('🎯 notificationTicket state changed:', notificationTicket);
+    // If there's no current notification and queue has items, show the first one (oldest)
+    if (!currentNotification && notificationQueue.length > 0) {
+      const [oldestNotification, ...rest] = notificationQueue;
+      console.log('📋 Processing notification queue - showing oldest:', oldestNotification.ticketId);
+      console.log('📋 Remaining in queue:', rest.length);
+      setCurrentNotification(oldestNotification);
+      setNotificationQueue(rest);
+    }
+  }, [currentNotification, notificationQueue]);
+  
+  // Debug: Log when current notification changes
+  useEffect(() => {
+    if (currentNotification) {
+      console.log('🎯 Current notification:', currentNotification.ticketId);
       console.log('🎯 Popup should be visible now');
     } else {
-      console.log('🎯 notificationTicket cleared, popup hidden');
+      console.log('🎯 Current notification cleared, popup hidden');
     }
-  }, [notificationTicket]);
+  }, [currentNotification]);
   const qrCodeRef = useRef(null);
   const html5QrCodeRef = useRef(null);
   const qrReaderContainerRef = useRef(null);
@@ -121,19 +134,47 @@ const AdminApp = () => {
 
   // Pusher real-time connection for check-in notifications
   useEffect(() => {
-    // Get Pusher credentials from environment variables
-    const pusherKey = import.meta.env.VITE_PUSHER_KEY;
-    const pusherCluster = import.meta.env.VITE_PUSHER_CLUSTER || 'us2';
+    // Detect environment (production vs local)
+    // Vite sets import.meta.env.DEV to true in development mode
+    const isProduction = !import.meta.env.DEV;
+    
+    // Debug: Log environment detection
+    console.log('🔍 Environment Detection:');
+    console.log('  - import.meta.env.DEV:', import.meta.env.DEV);
+    console.log('  - import.meta.env.MODE:', import.meta.env.MODE);
+    console.log('  - Detected as:', isProduction ? 'PRODUCTION' : 'LOCAL');
+    
+    // Use different Pusher credentials for local vs production
+    const pusherKey = isProduction 
+      ? (import.meta.env.VITE_PUSHER_KEY_PROD || import.meta.env.VITE_PUSHER_KEY)
+      : (import.meta.env.VITE_PUSHER_KEY_LOCAL || import.meta.env.VITE_PUSHER_KEY);
+    
+    const pusherCluster = isProduction
+      ? (import.meta.env.VITE_PUSHER_CLUSTER_PROD || import.meta.env.VITE_PUSHER_CLUSTER || 'us2')
+      : (import.meta.env.VITE_PUSHER_CLUSTER_LOCAL || import.meta.env.VITE_PUSHER_CLUSTER || 'us2');
+    
+    // Channel name - different for local vs production
+    const channelName = isProduction ? 'check-ins-prod' : 'check-ins-local';
+    
+    // Debug: Log which variables are being used
+    console.log('🔍 Pusher Configuration:');
+    console.log('  - Looking for:', isProduction ? 'VITE_PUSHER_KEY_PROD' : 'VITE_PUSHER_KEY_LOCAL');
+    console.log('  - VITE_PUSHER_KEY_LOCAL:', import.meta.env.VITE_PUSHER_KEY_LOCAL ? '✅ Set' : '❌ Not set');
+    console.log('  - VITE_PUSHER_KEY_PROD:', import.meta.env.VITE_PUSHER_KEY_PROD ? '✅ Set' : '❌ Not set');
+    console.log('  - VITE_PUSHER_KEY (fallback):', import.meta.env.VITE_PUSHER_KEY ? '✅ Set' : '❌ Not set');
     
     if (!pusherKey) {
-      console.warn('⚠️ Pusher key not configured. Set VITE_PUSHER_KEY environment variable.');
+      console.error(`❌ Pusher key not configured!`);
+      console.error(`   Set ${isProduction ? 'VITE_PUSHER_KEY_PROD' : 'VITE_PUSHER_KEY_LOCAL'} in your .env file`);
       setConnectionError('Pusher not configured. Real-time notifications disabled.');
       return;
     }
 
-    console.log('🔌 Initializing Pusher connection...');
+    console.log(`🔌 Initializing Pusher connection for ${isProduction ? 'PRODUCTION' : 'LOCAL'} environment...`);
     console.log('🔌 Pusher Key:', pusherKey ? `${pusherKey.substring(0, 10)}...` : 'Not set');
     console.log('🔌 Pusher Cluster:', pusherCluster);
+    console.log(`🔌 Channel: ${channelName}`);
+    console.log(`⚠️ IMPORTANT: Make sure backend is also using ${isProduction ? 'PRODUCTION' : 'LOCAL'} Pusher app!`);
 
     // Initialize Pusher
     const pusher = new Pusher(pusherKey, {
@@ -143,8 +184,8 @@ const AdminApp = () => {
 
     pusherRef.current = pusher;
 
-    // Subscribe to check-in channel
-    const channel = pusher.subscribe('check-ins');
+    // Subscribe to check-in channel (different for local vs production)
+    const channel = pusher.subscribe(channelName);
 
     // Handle successful subscription
     channel.bind('pusher:subscription_succeeded', () => {
@@ -164,8 +205,8 @@ const AdminApp = () => {
       console.log('📢 Received check-in notification:', data);
       console.log('📢 Ticket ID:', data.ticketId);
       
-      // Show notification popup (status will be current status, not CHECKED_IN yet)
-      setNotificationTicket({
+      // Add notification to queue (FIFO - oldest first)
+      const newNotification = {
         ticketId: data.ticketId,
         name: data.name,
         email: data.email,
@@ -173,7 +214,15 @@ const AdminApp = () => {
         status: data.status, // Use actual current status (PAID, PENDING, etc.)
         dob: data.dob,
         phone: data.phone,
-        paymentImage: data.paymentImage // Include payment image for approval
+        paymentImage: data.paymentImage, // Include payment image for approval
+        timestamp: Date.now() // Add timestamp to track order
+      };
+      
+      console.log('📋 Adding notification to queue:', newNotification.ticketId);
+      setNotificationQueue(prevQueue => {
+        const updatedQueue = [...prevQueue, newNotification];
+        console.log('📋 Queue length:', updatedQueue.length);
+        return updatedQueue;
       });
       
       // Don't update local state status yet - wait for approve button
@@ -1273,12 +1322,19 @@ const AdminApp = () => {
         </div>
       )}
 
-      {/* Real-time Check-in Notification Popup (SSE) */}
-      {notificationTicket && (
+      {/* Real-time Check-in Notification Popup (Queue-based, shows oldest first) */}
+      {currentNotification && (
         <>
-          {console.log('🎨 Rendering CheckInNotification popup with ticket:', notificationTicket)}
+          {console.log('🎨 Rendering CheckInNotification popup with ticket:', currentNotification)}
+          {notificationQueue.length > 0 && (
+            <div className="fixed top-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg z-[101]">
+              <p className="text-sm font-semibold">
+                ⏳ Còn {notificationQueue.length} vé đang chờ ({notificationQueue.length === 1 ? 'vé' : 'vé'})
+              </p>
+            </div>
+          )}
           <CheckInNotification
-            ticket={notificationTicket}
+            ticket={currentNotification}
             isMainClient={(() => {
               // Detect main client (computer/admin) vs mobile device
               // Option 1: Check if hostname matches main client domain (from env var)
@@ -1299,8 +1355,10 @@ const AdminApp = () => {
               return !isMobile;
             })()}
             onClose={() => {
-              console.log('🔴 Closing notification popup');
-              setNotificationTicket(null);
+              console.log('🔴 Closing notification popup for:', currentNotification.ticketId);
+              // Remove current notification and process next in queue
+              setCurrentNotification(null);
+              // The useEffect will automatically show the next one from the queue
             }}
             onApprove={async (ticketId) => {
               try {
@@ -1309,9 +1367,11 @@ const AdminApp = () => {
                 // Refresh data to show updated status
                 loadData(false);
                 console.log('✅ Ticket approved:', ticketId);
+                // Note: onClose() will be called by CheckInNotification component after approve succeeds
+                // This will trigger the queue to show the next notification
               } catch (error) {
                 console.error('❌ Error approving ticket:', error);
-                throw error; // Re-throw to let component handle it
+                throw error; // Re-throw to let component handle it (popup stays open on error)
               }
             }}
           />
