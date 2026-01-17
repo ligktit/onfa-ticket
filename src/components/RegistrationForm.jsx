@@ -692,7 +692,6 @@ const RegistrationForm = ({ onSuccess }) => {
 
                   <div className="flex items-center gap-2 rounded-lg bg-gray-200 p-2 px-4 mt-3">
                     <span className="text-sm sm:text-base text-gray-900 font-mono font-semibold break-all flex-1">0x229cd689abca9543f312bdceae42b367edf691b7</span>
-                    <p className="text-sm sm:text-base text-gray-600 font-medium">ONFA Chain</p>
 
                     <button
                       type="button"
@@ -706,6 +705,7 @@ const RegistrationForm = ({ onSuccess }) => {
                         <Copy className="w-5 h-5 text-gray-600" />
                       )}
                     </button>
+                    <p className="text-sm sm:text-base text-gray-600 font-medium">ONFA Chain</p>
                   </div>
                 </div>
               </div>
