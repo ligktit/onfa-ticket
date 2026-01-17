@@ -6,9 +6,9 @@ export const config = {
   runtime: 'edge', // Use Edge Runtime for better streaming support
 };
 
-export default async function handler(req) {
+export default async function handler(request) {
   // Handle OPTIONS request for CORS preflight
-  if (req.method === 'OPTIONS') {
+  if (request.method === 'OPTIONS') {
     return new Response(null, {
       status: 200,
       headers: {
@@ -20,13 +20,13 @@ export default async function handler(req) {
   }
 
   // Only allow GET requests
-  if (req.method !== 'GET') {
+  if (request.method !== 'GET') {
     return new Response('Method not allowed', { status: 405 });
   }
 
   // Get backend URL from environment variable
-  // Edge Runtime: Use env from Vercel environment variables
-  // Access via process.env in Edge Runtime (Vercel injects these)
+  // Edge Runtime: Vercel injects env vars - access via process.env
+  // Note: In Edge Runtime, env vars are available at build time
   const backendUrl = process.env.BACKEND_URL || 
                      process.env.VITE_API_URL || 
                      'http://localhost:5000';
