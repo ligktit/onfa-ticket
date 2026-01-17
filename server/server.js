@@ -16,19 +16,41 @@ const app = express();
 const server = http.createServer(app);
 const PORT = 5000;
 
+// Detect environment (production vs local)
+const isProduction = process.env.NODE_ENV === 'production';
+
+// Use different Pusher apps for local vs production to avoid mixing events
+const pusherConfig = isProduction ? {
+  // Production Pusher app
+  appId: process.env.PUSHER_APP_ID_PROD || process.env.PUSHER_APP_ID,
+  key: process.env.PUSHER_KEY_PROD || process.env.PUSHER_KEY,
+  secret: process.env.PUSHER_SECRET_PROD || process.env.PUSHER_SECRET,
+  cluster: process.env.PUSHER_CLUSTER_PROD || process.env.PUSHER_CLUSTER || 'us2',
+} : {
+  // Local development Pusher app
+  appId: process.env.PUSHER_APP_ID_LOCAL || process.env.PUSHER_APP_ID,
+  key: process.env.PUSHER_KEY_LOCAL || process.env.PUSHER_KEY,
+  secret: process.env.PUSHER_SECRET_LOCAL || process.env.PUSHER_SECRET,
+  cluster: process.env.PUSHER_CLUSTER_LOCAL || process.env.PUSHER_CLUSTER || 'us2',
+};
+
+// Channel name - different for local vs production
+const PUSHER_CHANNEL = isProduction ? 'check-ins-prod' : 'check-ins-local';
+
 // Initialize Pusher for real-time notifications
 const pusher = new Pusher({
-  appId: process.env.PUSHER_APP_ID,
-  key: process.env.PUSHER_KEY,
-  secret: process.env.PUSHER_SECRET,
-  cluster: process.env.PUSHER_CLUSTER || 'us2',
+  ...pusherConfig,
   useTLS: true
 });
 
+console.log(`🔌 Pusher initialized for ${isProduction ? 'PRODUCTION' : 'LOCAL'} environment`);
+console.log(`🔌 Channel: ${PUSHER_CHANNEL}`);
+console.log(`🔌 App ID: ${pusherConfig.appId ? `${pusherConfig.appId.substring(0, 8)}...` : 'Not set'}`);
+
 // Verify Pusher is configured
-if (!process.env.PUSHER_APP_ID || !process.env.PUSHER_KEY || !process.env.PUSHER_SECRET) {
+if (!pusherConfig.appId || !pusherConfig.key || !pusherConfig.secret) {
   console.warn('⚠️ Pusher credentials not configured. Real-time notifications will not work.');
-  console.warn('⚠️ Set PUSHER_APP_ID, PUSHER_KEY, and PUSHER_SECRET environment variables.');
+  console.warn(`⚠️ Set ${isProduction ? 'PUSHER_APP_ID_PROD' : 'PUSHER_APP_ID_LOCAL'}, ${isProduction ? 'PUSHER_KEY_PROD' : 'PUSHER_KEY_LOCAL'}, and ${isProduction ? 'PUSHER_SECRET_PROD' : 'PUSHER_SECRET_LOCAL'} environment variables.`);
 }
 
 // 1. Cấu hình để Frontend nói chuyện được với Backend
@@ -384,8 +406,8 @@ app.post('/api/checkin', async (req, res) => {
     console.log(`📨 Ticket ID: ${ticket.id}`);
     
     try {
-      await pusher.trigger('check-ins', 'ticket-checked-in', eventData);
-      console.log(`✅ Successfully sent Pusher event: ticket-checked-in for ${ticket.id}`);
+      await pusher.trigger(PUSHER_CHANNEL, 'ticket-checked-in', eventData);
+      console.log(`✅ Successfully sent Pusher event to ${PUSHER_CHANNEL}: ticket-checked-in for ${ticket.id}`);
     } catch (error) {
       console.error(`❌ Error sending Pusher event:`, error);
       console.error(`❌ Make sure Pusher credentials are configured correctly`);

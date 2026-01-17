@@ -1,14 +1,54 @@
 import { connectDB, Ticket } from './db.js';
 import Pusher from 'pusher';
 
-// Initialize Pusher (using environment variables from Vercel)
+// Detect environment (production on Vercel, local otherwise)
+const isProduction = process.env.VERCEL || process.env.NODE_ENV === 'production';
+
+// Debug: Log environment detection
+console.log('🔍 Backend Environment Detection:');
+console.log('  - process.env.VERCEL:', process.env.VERCEL);
+console.log('  - process.env.NODE_ENV:', process.env.NODE_ENV);
+console.log('  - Detected as:', isProduction ? 'PRODUCTION' : 'LOCAL');
+
+// Use different Pusher apps for local vs production to avoid mixing events
+const pusherConfig = isProduction ? {
+  // Production Pusher app (Vercel deployment)
+  appId: process.env.PUSHER_APP_ID_PROD || process.env.PUSHER_APP_ID,
+  key: process.env.PUSHER_KEY_PROD || process.env.PUSHER_KEY,
+  secret: process.env.PUSHER_SECRET_PROD || process.env.PUSHER_SECRET,
+  cluster: process.env.PUSHER_CLUSTER_PROD || process.env.PUSHER_CLUSTER || 'us2',
+} : {
+  // Local development Pusher app
+  appId: process.env.PUSHER_APP_ID_LOCAL || process.env.PUSHER_APP_ID,
+  key: process.env.PUSHER_KEY_LOCAL || process.env.PUSHER_KEY,
+  secret: process.env.PUSHER_SECRET_LOCAL || process.env.PUSHER_SECRET,
+  cluster: process.env.PUSHER_CLUSTER_LOCAL || process.env.PUSHER_CLUSTER || 'us2',
+};
+
+// Warn if using fallback variables in local mode
+if (!isProduction) {
+  if (!process.env.PUSHER_KEY_LOCAL && process.env.PUSHER_KEY) {
+    console.warn('⚠️ WARNING: Using fallback PUSHER_KEY instead of PUSHER_KEY_LOCAL!');
+    console.warn('⚠️ This might connect to PRODUCTION Pusher. Set PUSHER_KEY_LOCAL in server/.env');
+  }
+  if (!process.env.PUSHER_APP_ID_LOCAL && process.env.PUSHER_APP_ID) {
+    console.warn('⚠️ WARNING: Using fallback PUSHER_APP_ID instead of PUSHER_APP_ID_LOCAL!');
+  }
+}
+
+// Channel name - different for local vs production
+const PUSHER_CHANNEL = isProduction ? 'check-ins-prod' : 'check-ins-local';
+
+// Initialize Pusher
 const pusher = new Pusher({
-  appId: process.env.PUSHER_APP_ID,
-  key: process.env.PUSHER_KEY,
-  secret: process.env.PUSHER_SECRET,
-  cluster: process.env.PUSHER_CLUSTER || 'us2',
+  ...pusherConfig,
   useTLS: true
 });
+
+console.log(`🔌 Pusher initialized for ${isProduction ? 'PRODUCTION' : 'LOCAL'} environment`);
+console.log(`🔌 Channel: ${PUSHER_CHANNEL}`);
+console.log(`🔌 App ID: ${pusherConfig.appId ? `${pusherConfig.appId.substring(0, 8)}...` : 'Not set'}`);
+console.log(`🔌 Key: ${pusherConfig.key ? `${pusherConfig.key.substring(0, 10)}...` : 'Not set'}`);
 
 export default async function handler(req, res) {
   // Enable CORS
@@ -63,10 +103,10 @@ export default async function handler(req, res) {
     };
     
     // Publish Pusher event (only if credentials are configured)
-    if (process.env.PUSHER_APP_ID && process.env.PUSHER_KEY && process.env.PUSHER_SECRET) {
+    if (pusherConfig.appId && pusherConfig.key && pusherConfig.secret) {
       try {
-        await pusher.trigger('check-ins', 'ticket-checked-in', eventData);
-        console.log(`✅ Pusher event published: ticket-checked-in for ${ticket.id}`);
+        await pusher.trigger(PUSHER_CHANNEL, 'ticket-checked-in', eventData);
+        console.log(`✅ Pusher event published to ${PUSHER_CHANNEL}: ticket-checked-in for ${ticket.id}`);
       } catch (pusherError) {
         console.error('❌ Error publishing Pusher event:', pusherError);
         // Don't fail the request if Pusher fails - check-in still succeeded
