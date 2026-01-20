@@ -677,16 +677,16 @@ const RegistrationForm = ({ onSuccess }) => {
             <div className="bg-[#fefdf3] rounded-lg p-4">
               <div className="flex flex-col items-center mb-4">
                 <div className="bg-white p-3 sm:p-4 border border-gray-200 rounded-lg mb-3 w-full">
-                  <div className="rounded-lg bg-gray-200 p-3 sm:p-4 mt-3 space-y-3">
-                    <div className="text-sm sm:text-base text-gray-900 font-mono font-semibold break-all">
+                <div className="text-sm sm:text-base text-gray-900 font-mono font-semibold break-all">
                       👉 Mạng ONFA Chain
-                    </div>
+                </div>
+                <div className="rounded-lg bg-gray-200 p-3 sm:p-4 mt-3 space-y-3">
                     <div className="flex flex-wrap items-center gap-2 text-sm sm:text-base text-gray-900 font-mono font-semibold break-all">
-                      <span>📌 Địa chỉ ví nhận OFT: 0x229cd689abca9543f312bdceae42b367edf691b7</span>
+                      <span className="flex-1 min-w-0">📌 Địa chỉ ví nhận OFT: 0x229cd689abca9543f312bdceae42b367edf691b7</span>
                       <button
                         type="button"
                         onClick={() => copyWalletAddress("0x229cd689abca9543f312bdceae42b367edf691b7")}
-                        className="flex-shrink-0 p-2 hover:bg-gray-300 rounded-lg transition-colors"
+                        className="ml-auto flex-shrink-0 p-2 hover:bg-gray-300 rounded-lg transition-colors"
                         title="Copy địa chỉ ví"
                       >
                         {copiedAddress === "0x229cd689abca9543f312bdceae42b367edf691b7" ? (
@@ -697,11 +697,11 @@ const RegistrationForm = ({ onSuccess }) => {
                       </button>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 text-sm sm:text-base text-gray-900 font-mono font-semibold break-all">
-                      <span>📌 Địa chỉ ví nhận USDT: 0x4986c96a4b9c05b2872cfcee63b831ecf672ff6c</span>
+                      <span className="flex-1 min-w-0">📌 Địa chỉ ví nhận USDT: 0x4986c96a4b9c05b2872cfcee63b831ecf672ff6c</span>
                       <button
                         type="button"
                         onClick={() => copyWalletAddress("0x4986c96a4b9c05b2872cfcee63b831ecf672ff6c")}
-                        className="flex-shrink-0 p-2 hover:bg-gray-300 rounded-lg transition-colors"
+                        className="ml-auto flex-shrink-0 p-2 hover:bg-gray-300 rounded-lg transition-colors"
                         title="Copy địa chỉ ví"
                       >
                         {copiedAddress === "0x4986c96a4b9c05b2872cfcee63b831ecf672ff6c" ? (
@@ -711,15 +711,17 @@ const RegistrationForm = ({ onSuccess }) => {
                         )}
                       </button>
                     </div>
-                    <div className="text-sm sm:text-base text-gray-900 font-mono font-semibold break-all">
+                  </div>
+                <div className="text-sm sm:text-base text-gray-900 font-mono font-semibold break-all">
                       👉 Mạng Binance Smart Chain
-                    </div>
+                </div>
+                  <div className="rounded-lg bg-gray-200 p-3 sm:p-4 mt-3 space-y-3">
                     <div className="flex flex-wrap items-center gap-2 text-sm sm:text-base text-gray-900 font-mono font-semibold break-all">
-                      <span>📌 Địa chỉ ví nhận OFT: 0xc26da070ce179e9da59c7eb9d47ec5705a36371a</span>
+                      <span className="flex-1 min-w-0">📌 Địa chỉ ví nhận OFT: 0xc26da070ce179e9da59c7eb9d47ec5705a36371a</span>
                       <button
                         type="button"
                         onClick={() => copyWalletAddress("0xc26da070ce179e9da59c7eb9d47ec5705a36371a")}
-                        className="flex-shrink-0 p-2 hover:bg-gray-300 rounded-lg transition-colors"
+                        className="ml-auto flex-shrink-0 p-2 hover:bg-gray-300 rounded-lg transition-colors"
                         title="Copy địa chỉ ví"
                       >
                         {copiedAddress === "0xc26da070ce179e9da59c7eb9d47ec5705a36371a" ? (
@@ -730,11 +732,11 @@ const RegistrationForm = ({ onSuccess }) => {
                       </button>
                     </div>
                     <div className="flex flex-wrap items-center gap-2 text-sm sm:text-base text-gray-900 font-mono font-semibold break-all">
-                      <span>📌 Địa chỉ ví nhận USDT: 0xf41715df29e187d95ca2023ce8193840854e7716</span>
+                      <span className="flex-1 min-w-0">📌 Địa chỉ ví nhận USDT: 0xf41715df29e187d95ca2023ce8193840854e7716</span>
                       <button
                         type="button"
                         onClick={() => copyWalletAddress("0xf41715df29e187d95ca2023ce8193840854e7716")}
-                        className="flex-shrink-0 p-2 hover:bg-gray-300 rounded-lg transition-colors"
+                        className="ml-auto flex-shrink-0 p-2 hover:bg-gray-300 rounded-lg transition-colors"
                         title="Copy địa chỉ ví"
                       >
                         {copiedAddress === "0xf41715df29e187d95ca2023ce8193840854e7716" ? (
