@@ -43,7 +43,7 @@ const RegistrationForm = ({ onSuccess }) => {
   const [apiError, setApiError] = useState("");
   const [isSuccess, setIsSuccess] = useState(false);
   const [isLoadingStats, setIsLoadingStats] = useState(true);
-  const [copied, setCopied] = useState(false);
+  const [copiedAddress, setCopiedAddress] = useState("");
 
   // Load stats khi mở form
   useEffect(() => {
@@ -212,12 +212,11 @@ const RegistrationForm = ({ onSuccess }) => {
     }
   };
 
-  const copyWalletAddress = async () => {
-    const walletAddress = "0x229cd689abca9543f312bdceae42b367edf691b7";
+  const copyWalletAddress = async (walletAddress) => {
     try {
       await navigator.clipboard.writeText(walletAddress);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      setCopiedAddress(walletAddress);
+      setTimeout(() => setCopiedAddress(""), 2000);
     } catch (err) {
       console.error("Failed to copy:", err);
     }
@@ -676,37 +675,76 @@ const RegistrationForm = ({ onSuccess }) => {
 
             {/* Content */}
             <div className="bg-[#fefdf3] rounded-lg p-4">
-
-              {/* QR Code Section */}
               <div className="flex flex-col items-center mb-4">
-                <div className="bg-white p-3 sm:p-4 border border-gray-200 rounded-lg mb-3">
-                  <img
-                    src="/payment.png"
-                    alt="QR Thanh toán"
-                    className="sm:w-64 sm:h-64 md:w-[450px] md:h-[450px] rounded-[5%]"
-                    onError={(e) => {
-                      e.target.style.display = "none";
-                      e.target.parentElement.innerHTML = '<div class="w-56 h-56 sm:w-64 sm:h-64 md:w-72 md:h-72 bg-gray-200 flex items-center justify-center text-gray-500 text-sm text-center px-2 rounded-lg">QR Code<br/>Thanh toán</div>';
-                    }}
-                  />
-
-                  <div className="flex items-center gap-2 rounded-lg bg-gray-200 p-2 px-4 mt-3">
-                    <span className="text-sm sm:text-base text-gray-900 font-mono font-semibold break-all flex-1">0x229cd689abca9543f312bdceae42b367edf691b7</span>
-
-                    <button
-                      type="button"
-                      onClick={copyWalletAddress}
-                      className="flex-shrink-0 p-2 hover:bg-gray-200 rounded-lg transition-colors"
-                      title="Copy địa chỉ ví"
-                    >
-                      {copied ? (
-                        <CheckCircle className="w-5 h-5 text-green-600" />
-                      ) : (
-                        <Copy className="w-5 h-5 text-gray-600" />
-                      )}
-                    </button>
+                <div className="bg-white p-3 sm:p-4 border border-gray-200 rounded-lg mb-3 w-full">
+                  <div className="rounded-lg bg-gray-200 p-3 sm:p-4 mt-3 space-y-3">
+                    <div className="text-sm sm:text-base text-gray-900 font-mono font-semibold break-all">
+                      👉 Mạng ONFA Chain
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 text-sm sm:text-base text-gray-900 font-mono font-semibold break-all">
+                      <span>📌 Địa chỉ ví nhận OFT: 0x229cd689abca9543f312bdceae42b367edf691b7</span>
+                      <button
+                        type="button"
+                        onClick={() => copyWalletAddress("0x229cd689abca9543f312bdceae42b367edf691b7")}
+                        className="flex-shrink-0 p-2 hover:bg-gray-300 rounded-lg transition-colors"
+                        title="Copy địa chỉ ví"
+                      >
+                        {copiedAddress === "0x229cd689abca9543f312bdceae42b367edf691b7" ? (
+                          <CheckCircle className="w-5 h-5 text-green-600" />
+                        ) : (
+                          <Copy className="w-5 h-5 text-gray-600" />
+                        )}
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 text-sm sm:text-base text-gray-900 font-mono font-semibold break-all">
+                      <span>📌 Địa chỉ ví nhận USDT: 0x4986c96a4b9c05b2872cfcee63b831ecf672ff6c</span>
+                      <button
+                        type="button"
+                        onClick={() => copyWalletAddress("0x4986c96a4b9c05b2872cfcee63b831ecf672ff6c")}
+                        className="flex-shrink-0 p-2 hover:bg-gray-300 rounded-lg transition-colors"
+                        title="Copy địa chỉ ví"
+                      >
+                        {copiedAddress === "0x4986c96a4b9c05b2872cfcee63b831ecf672ff6c" ? (
+                          <CheckCircle className="w-5 h-5 text-green-600" />
+                        ) : (
+                          <Copy className="w-5 h-5 text-gray-600" />
+                        )}
+                      </button>
+                    </div>
+                    <div className="text-sm sm:text-base text-gray-900 font-mono font-semibold break-all">
+                      👉 Mạng Binance Smart Chain
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 text-sm sm:text-base text-gray-900 font-mono font-semibold break-all">
+                      <span>📌 Địa chỉ ví nhận OFT: 0xc26da070ce179e9da59c7eb9d47ec5705a36371a</span>
+                      <button
+                        type="button"
+                        onClick={() => copyWalletAddress("0xc26da070ce179e9da59c7eb9d47ec5705a36371a")}
+                        className="flex-shrink-0 p-2 hover:bg-gray-300 rounded-lg transition-colors"
+                        title="Copy địa chỉ ví"
+                      >
+                        {copiedAddress === "0xc26da070ce179e9da59c7eb9d47ec5705a36371a" ? (
+                          <CheckCircle className="w-5 h-5 text-green-600" />
+                        ) : (
+                          <Copy className="w-5 h-5 text-gray-600" />
+                        )}
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2 text-sm sm:text-base text-gray-900 font-mono font-semibold break-all">
+                      <span>📌 Địa chỉ ví nhận USDT: 0xf41715df29e187d95ca2023ce8193840854e7716</span>
+                      <button
+                        type="button"
+                        onClick={() => copyWalletAddress("0xf41715df29e187d95ca2023ce8193840854e7716")}
+                        className="flex-shrink-0 p-2 hover:bg-gray-300 rounded-lg transition-colors"
+                        title="Copy địa chỉ ví"
+                      >
+                        {copiedAddress === "0xf41715df29e187d95ca2023ce8193840854e7716" ? (
+                          <CheckCircle className="w-5 h-5 text-green-600" />
+                        ) : (
+                          <Copy className="w-5 h-5 text-gray-600" />
+                        )}
+                      </button>
+                    </div>
                   </div>
-                  <p className="text-sm sm:text-base text-gray-600 font-medium text-center block w-full">ONFA Chain</p>
                 </div>
               </div>
             </div>
