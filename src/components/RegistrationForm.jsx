@@ -15,7 +15,7 @@ import {
 import { BackendAPI } from "../utils/api";
 import { TIER_CONFIG } from "../utils/config";
 
-const RegistrationForm = ({ onSuccess }) => {
+const RegistrationForm = () => {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -347,488 +347,508 @@ const RegistrationForm = ({ onSuccess }) => {
     </div>
   );
 
+  const showFormUI = false;
+
   return (
     <div className="mx-auto w-full relative">
-      {/* Loading Overlay */}
-      {(isLoadingStats || isSubmitting) && <LoadingOverlay />}
-      
-      <div className={`bg-white rounded-xl sm:rounded-2xl shadow-2xl overflow-hidden transition-all duration-300 ${
-        (isLoadingStats || isSubmitting) ? 'opacity-50 pointer-events-none' : 'opacity-100'
-      }`}>
-        {/* Banner */}
-        <div className="w-full h-full bg-gray-900 overflow-hidden">
-          <img
-            src="/banner.jpg"
-            alt="Banner"
-            className="w-full h-full object-fill"
-            onError={(e) => {
-              e.target.style.display = "none";
-              e.target.parentElement.className = "w-full h-32 sm:h-40 md:h-48 bg-gradient-to-r from-yellow-500 to-yellow-600 flex items-center justify-center";
-              e.target.parentElement.innerHTML = '<h2 class="text-xl sm:text-2xl md:text-3xl font-bold text-black px-4 text-center">ONFA 2026</h2>';
-            }}
-          />
+      <div className="bg-white rounded-xl sm:rounded-2xl shadow-2xl overflow-hidden border-2 border-yellow-400">
+        <div className="px-4 sm:px-6 md:px-8 py-10 sm:py-12 md:py-14 text-center">
+          <div className="flex justify-center mb-6">
+            <AlertCircle className="text-yellow-600" size={64} />
+          </div>
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-3">
+            Form Đăng ký đã đóng
+          </h2>
+          <p className="text-sm sm:text-base text-gray-700">
+            Cảm ơn bạn đã quan tâm. Hẹn gặp lại ở các sự kiện tiếp theo.
+          </p>
         </div>
+      </div>
 
-        {/* Form Inputs */}
-        <div className="px-4 sm:px-6 md:px-8 py-6 sm:py-7 md:py-8 space-y-4 sm:space-y-5 md:space-y-6">
-          {apiError && (
-            <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded text-red-700 flex items-center">
-              <AlertCircle className="mr-2" size={20} /> {apiError}
-            </div>
-          )}
-
-          {/* Chọn hạng vé */}
-          <div>
-            <label className="block text-gray-700 font-semibold mb-4">
-              <Ticket className="inline mr-2" size={18} />
-              Chọn Hạng vé <span className="text-red-500">*</span>
-            </label>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {/* Vé Super VIP Card */}
-              <button
-                type="button"
-                onClick={() => handleChange("tier", "supervip")}
-                disabled={ticketStats.supervipRemaining === 0}
-                className={`relative p-5 rounded-xl border transition-all duration-300 text-left h-full ${
-                  formData.tier === "supervip"
-                    ? "border-yellow-400 bg-gradient-to-br from-yellow-50 to-yellow-100 shadow-lg shadow-yellow-200/50"
-                    : "border-gray-200 bg-white hover:border-yellow-300 hover:shadow-md"
-                } ${
-                  ticketStats.supervipRemaining === 0
-                    ? "opacity-50 cursor-not-allowed"
-                    : "cursor-pointer"
-                }`}
-              >
-                {formData.tier === "supervip" && (
-                  <div className="absolute top-3 right-3">
-                    <CheckCircle className="text-yellow-600" size={24} strokeWidth={2.5} />
-                  </div>
-                )}
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-2xl">👑</span>
-                  <span
-                    className={`font-bold text-lg ${
-                      formData.tier === "supervip"
-                        ? "text-yellow-700"
-                        : "text-gray-800"
-                    }`}
-                  >
-                    Vé Super VIP
-                  </span>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-xs text-gray-500 font-medium">Giá:</span>
-                    <span className="text-base font-bold text-yellow-700">{TIER_CONFIG.supervip.price}</span>
-                  </div>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-xs text-gray-500 font-medium">Còn lại:</span>
-                    <span className={`text-sm font-bold ${
-                      ticketStats.supervipRemaining === 0 ? "text-red-600" : "text-gray-800"
-                    }`}>
-                      {ticketStats.supervipRemaining}
-                    </span>
-                  </div>
-                  <div className="pt-2 border-t border-gray-200 mt-3">
-                    <ul className="space-y-1.5 text-xs text-gray-600">
-                      <li className="flex items-start gap-2">
-                        <span className="text-yellow-500 mt-0.5">•</span>
-                        <span>Khu vực chỗ ngồi VIP nhất, ngay sát sân khấu với tầm nhìn tuyệt đối</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-yellow-500 mt-0.5">•</span>
-                        <span>Trọn bộ quà tặng cao cấp và độc quyền từ Mettitech và ONFA</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-yellow-500 mt-0.5">•</span>
-                        <span>Ưu tiên đặc biệt trong các hoạt động và sự kiện</span>
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              </button>
-
-              {/* Vé VIP Card */}
-              <button
-                type="button"
-                onClick={() => handleChange("tier", "vvip")}
-                disabled={ticketStats.vvipRemaining === 0}
-                className={`relative p-5 rounded-xl border transition-all duration-300 text-left h-full ${
-                  formData.tier === "vvip"
-                    ? "border-yellow-400 bg-gradient-to-br from-yellow-50 to-yellow-100 shadow-lg shadow-yellow-200/50"
-                    : "border-gray-200 bg-white hover:border-yellow-300 hover:shadow-md"
-                } ${
-                  ticketStats.vvipRemaining === 0
-                    ? "opacity-50 cursor-not-allowed"
-                    : "cursor-pointer"
-                }`}
-              >
-                {formData.tier === "vvip" && (
-                  <div className="absolute top-3 right-3">
-                    <CheckCircle className="text-yellow-600" size={24} strokeWidth={2.5} />
-                  </div>
-                )}
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-2xl">🎫</span>
-                  <span
-                    className={`font-bold text-lg ${
-                      formData.tier === "vvip"
-                        ? "text-yellow-700"
-                        : "text-gray-800"
-                    }`}
-                  >
-                    Vé VIP
-                  </span>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-xs text-gray-500 font-medium">Giá:</span>
-                    <span className="text-base font-bold text-purple-600">150 OFT</span>
-                  </div>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-xs text-gray-500 font-medium">Còn lại:</span>
-                    <span className={`text-sm font-bold ${
-                      ticketStats.vvipRemaining === 0 ? "text-red-600" : "text-gray-800"
-                    }`}>
-                      {ticketStats.vvipRemaining}
-                    </span>
-                  </div>
-                  <div className="pt-2 border-t border-gray-200 mt-3">
-                    <ul className="space-y-1.5 text-xs text-gray-600">
-                      <li className="flex items-start gap-2">
-                        <span className="text-yellow-500 mt-0.5">•</span>
-                        <span>Ưu tiên khu vực chỗ ngồi gần sân khấu với tầm nhìn bao quát</span>
-                      </li>
-                      <li className="flex items-start gap-2">
-                        <span className="text-yellow-500 mt-0.5">•</span>
-                        <span>Đặc biệt đi kèm trọn bộ quà tặng độc quyền và giá trị đến từ Mettitech và ONFA</span>
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              </button>
-
-              {/* Vé Superior Card */}
-              <button
-                type="button"
-                onClick={() => handleChange("tier", "vip")}
-                disabled={ticketStats.vipRemaining === 0}
-                className={`relative p-5 rounded-xl border transition-all duration-300 text-left h-full ${
-                  formData.tier === "vip"
-                    ? "border-yellow-400 bg-gradient-to-br from-yellow-50 to-yellow-100 shadow-lg shadow-yellow-200/50"
-                    : "border-gray-200 bg-white hover:border-yellow-300 hover:shadow-md"
-                } ${
-                  ticketStats.vipRemaining === 0
-                    ? "opacity-50 cursor-not-allowed"
-                    : "cursor-pointer"
-                }`}
-              >
-                {formData.tier === "vip" && (
-                  <div className="absolute top-3 right-3">
-                    <CheckCircle className="text-yellow-600" size={24} strokeWidth={2.5} />
-                  </div>
-                )}
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="text-2xl">🎫</span>
-                  <span
-                    className={`font-bold text-lg ${
-                      formData.tier === "vip"
-                        ? "text-yellow-700"
-                        : "text-gray-800"
-                    }`}
-                  >
-                    Vé Superior
-                  </span>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-xs text-gray-500 font-medium">Giá:</span>
-                    <span className="text-base font-bold text-yellow-600">100 OFT</span>
-                  </div>
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-xs text-gray-500 font-medium">Còn lại:</span>
-                    <span className={`text-sm font-bold ${
-                      ticketStats.vipRemaining === 0 ? "text-red-600" : "text-gray-800"
-                    }`}>
-                      {ticketStats.vipRemaining}
-                    </span>
-                  </div>
-                  <div className="pt-2 border-t border-gray-200 mt-3">
-                    <ul className="space-y-1.5 text-xs text-gray-600">
-                      <li className="flex items-start gap-2">
-                        <span className="text-yellow-500 mt-0.5">•</span>
-                        <span>Gói quà tặng tri ân từ Mettitech và ONFA</span>
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-              </button>
-            </div>
-            {errors.tier && touched.tier && (
-              <p className="mt-3 text-sm text-red-600 flex items-center">
-                <AlertCircle size={14} className="mr-1" />
-                {errors.tier}
-              </p>
-            )}
-          </div>
-
-          {/* Họ tên */}
-          <div>
-            <label className="block text-gray-700 font-semibold mb-2">
-              <User size={18} className="inline mr-2" />
-              Họ và tên <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={formData.name}
-              onChange={(e) => handleChange("name", e.target.value)}
-              onBlur={() => handleBlur("name")}
-              className={`w-full px-4 py-3 rounded-lg border bg-[#f2f4f7] text-black placeholder-gray-500 focus:outline-none focus:ring-2 ${
-                errors.name && touched.name
-                  ? "border-red-500"
-                  : "border-gray-300"
-              }`}
-              placeholder="Nguyễn Văn A"
+      {showFormUI && (
+      <div className="mx-auto w-full relative">
+        {/* Loading Overlay */}
+        {(isLoadingStats || isSubmitting) && <LoadingOverlay />}
+        
+        <div className={`bg-white rounded-xl sm:rounded-2xl shadow-2xl overflow-hidden transition-all duration-300 ${
+          (isLoadingStats || isSubmitting) ? 'opacity-50 pointer-events-none' : 'opacity-100'
+        }`}>
+          {/* Banner */}
+          <div className="w-full h-full bg-gray-900 overflow-hidden">
+            <img
+              src="/banner.jpg"
+              alt="Banner"
+              className="w-full h-full object-fill"
+              onError={(e) => {
+                e.target.style.display = "none";
+                e.target.parentElement.className = "w-full h-32 sm:h-40 md:h-48 bg-gradient-to-r from-yellow-500 to-yellow-600 flex items-center justify-center";
+                e.target.parentElement.innerHTML = '<h2 class="text-xl sm:text-2xl md:text-3xl font-bold text-black px-4 text-center">ONFA 2026</h2>';
+              }}
             />
-            {errors.name && touched.name && (
-              <p className="text-red-500 text-sm mt-1">{errors.name}</p>
-            )}
           </div>
 
-          {/* Email */}
-          <div>
-            <label className="block text-gray-700 font-semibold mb-2">
-              <Mail size={18} className="inline mr-2" />
-              Email (Sử dụng tài khoản ONFA) <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="email"
-              value={formData.email}
-              onChange={(e) => handleChange("email", e.target.value)}
-              onBlur={() => handleBlur("email")}
-              className={`w-full px-4 py-3 rounded-lg border bg-[#f2f4f7] text-black placeholder-gray-500 focus:outline-none focus:ring-2 ${
-                errors.email && touched.email
-                  ? "border-red-500"
-                  : "border-gray-300"
-              }`}
-              placeholder="email@example.com"
-            />
-            {errors.email && touched.email && (
-              <p className="text-red-500 text-sm mt-1">{errors.email}</p>
+          {/* Form Inputs */}
+          <div className="px-4 sm:px-6 md:px-8 py-6 sm:py-7 md:py-8 space-y-4 sm:space-y-5 md:space-y-6">
+            {apiError && (
+              <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded text-red-700 flex items-center">
+                <AlertCircle className="mr-2" size={20} /> {apiError}
+              </div>
             )}
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* SĐT */}
+            {/* Chọn hạng vé */}
             <div>
-              <label className="block text-gray-700 font-semibold mb-2">
-                <Phone size={18} className="inline mr-2" />
-                Số điện thoại <span className="text-red-500">*</span>
+              <label className="block text-gray-700 font-semibold mb-4">
+                <Ticket className="inline mr-2" size={18} />
+                Chọn Hạng vé <span className="text-red-500">*</span>
               </label>
-              <input
-                type="tel"
-                value={formData.phone}
-                onChange={(e) => handleChange("phone", e.target.value)}
-                onBlur={() => handleBlur("phone")}
-                className={`w-full px-4 py-3 rounded-lg border bg-[#f2f4f7] text-black placeholder-gray-500 focus:outline-none focus:ring-2 ${
-                  errors.phone && touched.phone
-                    ? "border-red-500"
-                    : "border-gray-300"
-                }`}
-                placeholder="0901234567"
-              />
-              {errors.phone && touched.phone && (
-                <p className="text-red-500 text-sm mt-1">{errors.phone}</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {/* Vé Super VIP Card */}
+                <button
+                  type="button"
+                  onClick={() => handleChange("tier", "supervip")}
+                  disabled={ticketStats.supervipRemaining === 0}
+                  className={`relative p-5 rounded-xl border transition-all duration-300 text-left h-full ${
+                    formData.tier === "supervip"
+                      ? "border-yellow-400 bg-gradient-to-br from-yellow-50 to-yellow-100 shadow-lg shadow-yellow-200/50"
+                      : "border-gray-200 bg-white hover:border-yellow-300 hover:shadow-md"
+                  } ${
+                    ticketStats.supervipRemaining === 0
+                      ? "opacity-50 cursor-not-allowed"
+                      : "cursor-pointer"
+                  }`}
+                >
+                  {formData.tier === "supervip" && (
+                    <div className="absolute top-3 right-3">
+                      <CheckCircle className="text-yellow-600" size={24} strokeWidth={2.5} />
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-2xl">👑</span>
+                    <span
+                      className={`font-bold text-lg ${
+                        formData.tier === "supervip"
+                          ? "text-yellow-700"
+                          : "text-gray-800"
+                      }`}
+                    >
+                      Vé Super VIP
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-xs text-gray-500 font-medium">Giá:</span>
+                      <span className="text-base font-bold text-yellow-700">{TIER_CONFIG.supervip.price}</span>
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-xs text-gray-500 font-medium">Còn lại:</span>
+                      <span className={`text-sm font-bold ${
+                        ticketStats.supervipRemaining === 0 ? "text-red-600" : "text-gray-800"
+                      }`}>
+                        {ticketStats.supervipRemaining}
+                      </span>
+                    </div>
+                    <div className="pt-2 border-t border-gray-200 mt-3">
+                      <ul className="space-y-1.5 text-xs text-gray-600">
+                        <li className="flex items-start gap-2">
+                          <span className="text-yellow-500 mt-0.5">•</span>
+                          <span>Khu vực chỗ ngồi VIP nhất, ngay sát sân khấu với tầm nhìn tuyệt đối</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="text-yellow-500 mt-0.5">•</span>
+                          <span>Trọn bộ quà tặng cao cấp và độc quyền từ Mettitech và ONFA</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="text-yellow-500 mt-0.5">•</span>
+                          <span>Ưu tiên đặc biệt trong các hoạt động và sự kiện</span>
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </button>
+
+                {/* Vé VIP Card */}
+                <button
+                  type="button"
+                  onClick={() => handleChange("tier", "vvip")}
+                  disabled={ticketStats.vvipRemaining === 0}
+                  className={`relative p-5 rounded-xl border transition-all duration-300 text-left h-full ${
+                    formData.tier === "vvip"
+                      ? "border-yellow-400 bg-gradient-to-br from-yellow-50 to-yellow-100 shadow-lg shadow-yellow-200/50"
+                      : "border-gray-200 bg-white hover:border-yellow-300 hover:shadow-md"
+                  } ${
+                    ticketStats.vvipRemaining === 0
+                      ? "opacity-50 cursor-not-allowed"
+                      : "cursor-pointer"
+                  }`}
+                >
+                  {formData.tier === "vvip" && (
+                    <div className="absolute top-3 right-3">
+                      <CheckCircle className="text-yellow-600" size={24} strokeWidth={2.5} />
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-2xl">🎫</span>
+                    <span
+                      className={`font-bold text-lg ${
+                        formData.tier === "vvip"
+                          ? "text-yellow-700"
+                          : "text-gray-800"
+                      }`}
+                    >
+                      Vé VIP
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-xs text-gray-500 font-medium">Giá:</span>
+                      <span className="text-base font-bold text-purple-600">150 OFT</span>
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-xs text-gray-500 font-medium">Còn lại:</span>
+                      <span className={`text-sm font-bold ${
+                        ticketStats.vvipRemaining === 0 ? "text-red-600" : "text-gray-800"
+                      }`}>
+                        {ticketStats.vvipRemaining}
+                      </span>
+                    </div>
+                    <div className="pt-2 border-t border-gray-200 mt-3">
+                      <ul className="space-y-1.5 text-xs text-gray-600">
+                        <li className="flex items-start gap-2">
+                          <span className="text-yellow-500 mt-0.5">•</span>
+                          <span>Ưu tiên khu vực chỗ ngồi gần sân khấu với tầm nhìn bao quát</span>
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <span className="text-yellow-500 mt-0.5">•</span>
+                          <span>Đặc biệt đi kèm trọn bộ quà tặng độc quyền và giá trị đến từ Mettitech và ONFA</span>
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </button>
+
+                {/* Vé Superior Card */}
+                <button
+                  type="button"
+                  onClick={() => handleChange("tier", "vip")}
+                  disabled={ticketStats.vipRemaining === 0}
+                  className={`relative p-5 rounded-xl border transition-all duration-300 text-left h-full ${
+                    formData.tier === "vip"
+                      ? "border-yellow-400 bg-gradient-to-br from-yellow-50 to-yellow-100 shadow-lg shadow-yellow-200/50"
+                      : "border-gray-200 bg-white hover:border-yellow-300 hover:shadow-md"
+                  } ${
+                    ticketStats.vipRemaining === 0
+                      ? "opacity-50 cursor-not-allowed"
+                      : "cursor-pointer"
+                  }`}
+                >
+                  {formData.tier === "vip" && (
+                    <div className="absolute top-3 right-3">
+                      <CheckCircle className="text-yellow-600" size={24} strokeWidth={2.5} />
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-2xl">🎫</span>
+                    <span
+                      className={`font-bold text-lg ${
+                        formData.tier === "vip"
+                          ? "text-yellow-700"
+                          : "text-gray-800"
+                      }`}
+                    >
+                      Vé Superior
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-xs text-gray-500 font-medium">Giá:</span>
+                      <span className="text-base font-bold text-yellow-600">100 OFT</span>
+                    </div>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-xs text-gray-500 font-medium">Còn lại:</span>
+                      <span className={`text-sm font-bold ${
+                        ticketStats.vipRemaining === 0 ? "text-red-600" : "text-gray-800"
+                      }`}>
+                        {ticketStats.vipRemaining}
+                      </span>
+                    </div>
+                    <div className="pt-2 border-t border-gray-200 mt-3">
+                      <ul className="space-y-1.5 text-xs text-gray-600">
+                        <li className="flex items-start gap-2">
+                          <span className="text-yellow-500 mt-0.5">•</span>
+                          <span>Gói quà tặng tri ân từ Mettitech và ONFA</span>
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </button>
+              </div>
+              {errors.tier && touched.tier && (
+                <p className="mt-3 text-sm text-red-600 flex items-center">
+                  <AlertCircle size={14} className="mr-1" />
+                  {errors.tier}
+                </p>
               )}
             </div>
 
-            {/* Ngày sinh */}
+            {/* Họ tên */}
             <div>
               <label className="block text-gray-700 font-semibold mb-2">
-                <Calendar size={18} className="inline mr-2" />
-                Ngày sinh <span className="text-red-500">*</span>
+                <User size={18} className="inline mr-2" />
+                Họ và tên <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
-                maxLength="10"
-                placeholder="dd-mm-yyyy (VD: 15012000)"
-                value={formData.dob}
-                onChange={(e) => {
-                  const formatted = formatDateInput(e.target.value);
-                  handleChange("dob", formatted);
-                }}
-                onBlur={() => handleBlur("dob")}
+                value={formData.name}
+                onChange={(e) => handleChange("name", e.target.value)}
+                onBlur={() => handleBlur("name")}
                 className={`w-full px-4 py-3 rounded-lg border bg-[#f2f4f7] text-black placeholder-gray-500 focus:outline-none focus:ring-2 ${
-                  errors.dob && touched.dob
+                  errors.name && touched.name
                     ? "border-red-500"
                     : "border-gray-300"
                 }`}
+                placeholder="Nguyễn Văn A"
               />
-              {errors.dob && touched.dob && (
-                <p className="text-red-500 text-sm mt-1">{errors.dob}</p>
+              {errors.name && touched.name && (
+                <p className="text-red-500 text-sm mt-1">{errors.name}</p>
               )}
             </div>
-          </div>
 
-          {/* QR Thanh toán - VietQR Style */}
-          <div className="bg-white border-2 border-blue-300 rounded-lg shadow-lg overflow-hidden">
+            {/* Email */}
+            <div>
+              <label className="block text-gray-700 font-semibold mb-2">
+                <Mail size={18} className="inline mr-2" />
+                Email (Sử dụng tài khoản ONFA) <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="email"
+                value={formData.email}
+                onChange={(e) => handleChange("email", e.target.value)}
+                onBlur={() => handleBlur("email")}
+                className={`w-full px-4 py-3 rounded-lg border bg-[#f2f4f7] text-black placeholder-gray-500 focus:outline-none focus:ring-2 ${
+                  errors.email && touched.email
+                    ? "border-red-500"
+                    : "border-gray-300"
+                }`}
+                placeholder="email@example.com"
+              />
+              {errors.email && touched.email && (
+                <p className="text-red-500 text-sm mt-1">{errors.email}</p>
+              )}
+            </div>
 
-            {/* Content */}
-            <div className="bg-[#fefdf3] rounded-lg p-4">
-              <div className="flex flex-col items-center mb-4">
-                <div className="bg-white p-3 sm:p-4 border border-gray-200 rounded-lg mb-3 w-full">
-                <div className="text-sm sm:text-base text-gray-900 font-mono font-semibold break-all">
-                      👉 Mạng ONFA Chain
-                </div>
-                <div className="rounded-lg bg-gray-200 p-3 sm:p-4 mt-3 space-y-3">
-                    <div className="flex flex-wrap items-center gap-2 text-sm sm:text-base text-gray-900 font-mono font-semibold break-all">
-                      <span className="flex-1 min-w-0">📌 Địa chỉ ví nhận OFT: 0x229cd689abca9543f312bdceae42b367edf691b7</span>
-                      <button
-                        type="button"
-                        onClick={() => copyWalletAddress("0x229cd689abca9543f312bdceae42b367edf691b7")}
-                        className="ml-auto flex-shrink-0 p-2 hover:bg-gray-300 rounded-lg transition-colors"
-                        title="Copy địa chỉ ví"
-                      >
-                        {copiedAddress === "0x229cd689abca9543f312bdceae42b367edf691b7" ? (
-                          <CheckCircle className="w-5 h-5 text-green-600" />
-                        ) : (
-                          <Copy className="w-5 h-5 text-gray-600" />
-                        )}
-                      </button>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2 text-sm sm:text-base text-gray-900 font-mono font-semibold break-all">
-                      <span className="flex-1 min-w-0">📌 Địa chỉ ví nhận USDT: 0x4986c96a4b9c05b2872cfcee63b831ecf672ff6c</span>
-                      <button
-                        type="button"
-                        onClick={() => copyWalletAddress("0x4986c96a4b9c05b2872cfcee63b831ecf672ff6c")}
-                        className="ml-auto flex-shrink-0 p-2 hover:bg-gray-300 rounded-lg transition-colors"
-                        title="Copy địa chỉ ví"
-                      >
-                        {copiedAddress === "0x4986c96a4b9c05b2872cfcee63b831ecf672ff6c" ? (
-                          <CheckCircle className="w-5 h-5 text-green-600" />
-                        ) : (
-                          <Copy className="w-5 h-5 text-gray-600" />
-                        )}
-                      </button>
-                    </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* SĐT */}
+              <div>
+                <label className="block text-gray-700 font-semibold mb-2">
+                  <Phone size={18} className="inline mr-2" />
+                  Số điện thoại <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="tel"
+                  value={formData.phone}
+                  onChange={(e) => handleChange("phone", e.target.value)}
+                  onBlur={() => handleBlur("phone")}
+                  className={`w-full px-4 py-3 rounded-lg border bg-[#f2f4f7] text-black placeholder-gray-500 focus:outline-none focus:ring-2 ${
+                    errors.phone && touched.phone
+                      ? "border-red-500"
+                      : "border-gray-300"
+                  }`}
+                  placeholder="0901234567"
+                />
+                {errors.phone && touched.phone && (
+                  <p className="text-red-500 text-sm mt-1">{errors.phone}</p>
+                )}
+              </div>
+
+              {/* Ngày sinh */}
+              <div>
+                <label className="block text-gray-700 font-semibold mb-2">
+                  <Calendar size={18} className="inline mr-2" />
+                  Ngày sinh <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  maxLength="10"
+                  placeholder="dd-mm-yyyy (VD: 15012000)"
+                  value={formData.dob}
+                  onChange={(e) => {
+                    const formatted = formatDateInput(e.target.value);
+                    handleChange("dob", formatted);
+                  }}
+                  onBlur={() => handleBlur("dob")}
+                  className={`w-full px-4 py-3 rounded-lg border bg-[#f2f4f7] text-black placeholder-gray-500 focus:outline-none focus:ring-2 ${
+                    errors.dob && touched.dob
+                      ? "border-red-500"
+                      : "border-gray-300"
+                  }`}
+                />
+                {errors.dob && touched.dob && (
+                  <p className="text-red-500 text-sm mt-1">{errors.dob}</p>
+                )}
+              </div>
+            </div>
+
+            {/* QR Thanh toán - VietQR Style */}
+            <div className="bg-white border-2 border-blue-300 rounded-lg shadow-lg overflow-hidden">
+
+              {/* Content */}
+              <div className="bg-[#fefdf3] rounded-lg p-4">
+                <div className="flex flex-col items-center mb-4">
+                  <div className="bg-white p-3 sm:p-4 border border-gray-200 rounded-lg mb-3 w-full">
+                  <div className="text-sm sm:text-base text-gray-900 font-mono font-semibold break-all">
+                        👉 Mạng ONFA Chain
                   </div>
-                <div className="text-sm sm:text-base text-gray-900 font-mono font-semibold break-all">
-                      👉 Mạng Binance Smart Chain
-                </div>
                   <div className="rounded-lg bg-gray-200 p-3 sm:p-4 mt-3 space-y-3">
-                    <div className="flex flex-wrap items-center gap-2 text-sm sm:text-base text-gray-900 font-mono font-semibold break-all">
-                      <span className="flex-1 min-w-0">📌 Địa chỉ ví nhận OFT: 0xc26da070ce179e9da59c7eb9d47ec5705a36371a</span>
-                      <button
-                        type="button"
-                        onClick={() => copyWalletAddress("0xc26da070ce179e9da59c7eb9d47ec5705a36371a")}
-                        className="ml-auto flex-shrink-0 p-2 hover:bg-gray-300 rounded-lg transition-colors"
-                        title="Copy địa chỉ ví"
-                      >
-                        {copiedAddress === "0xc26da070ce179e9da59c7eb9d47ec5705a36371a" ? (
-                          <CheckCircle className="w-5 h-5 text-green-600" />
-                        ) : (
-                          <Copy className="w-5 h-5 text-gray-600" />
-                        )}
-                      </button>
+                      <div className="flex flex-wrap items-center gap-2 text-sm sm:text-base text-gray-900 font-mono font-semibold break-all">
+                        <span className="flex-1 min-w-0">📌 Địa chỉ ví nhận OFT: 0x229cd689abca9543f312bdceae42b367edf691b7</span>
+                        <button
+                          type="button"
+                          onClick={() => copyWalletAddress("0x229cd689abca9543f312bdceae42b367edf691b7")}
+                          className="ml-auto flex-shrink-0 p-2 hover:bg-gray-300 rounded-lg transition-colors"
+                          title="Copy địa chỉ ví"
+                        >
+                          {copiedAddress === "0x229cd689abca9543f312bdceae42b367edf691b7" ? (
+                            <CheckCircle className="w-5 h-5 text-green-600" />
+                          ) : (
+                            <Copy className="w-5 h-5 text-gray-600" />
+                          )}
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 text-sm sm:text-base text-gray-900 font-mono font-semibold break-all">
+                        <span className="flex-1 min-w-0">📌 Địa chỉ ví nhận USDT: 0x4986c96a4b9c05b2872cfcee63b831ecf672ff6c</span>
+                        <button
+                          type="button"
+                          onClick={() => copyWalletAddress("0x4986c96a4b9c05b2872cfcee63b831ecf672ff6c")}
+                          className="ml-auto flex-shrink-0 p-2 hover:bg-gray-300 rounded-lg transition-colors"
+                          title="Copy địa chỉ ví"
+                        >
+                          {copiedAddress === "0x4986c96a4b9c05b2872cfcee63b831ecf672ff6c" ? (
+                            <CheckCircle className="w-5 h-5 text-green-600" />
+                          ) : (
+                            <Copy className="w-5 h-5 text-gray-600" />
+                          )}
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex flex-wrap items-center gap-2 text-sm sm:text-base text-gray-900 font-mono font-semibold break-all">
-                      <span className="flex-1 min-w-0">📌 Địa chỉ ví nhận USDT: 0xf41715df29e187d95ca2023ce8193840854e7716</span>
-                      <button
-                        type="button"
-                        onClick={() => copyWalletAddress("0xf41715df29e187d95ca2023ce8193840854e7716")}
-                        className="ml-auto flex-shrink-0 p-2 hover:bg-gray-300 rounded-lg transition-colors"
-                        title="Copy địa chỉ ví"
-                      >
-                        {copiedAddress === "0xf41715df29e187d95ca2023ce8193840854e7716" ? (
-                          <CheckCircle className="w-5 h-5 text-green-600" />
-                        ) : (
-                          <Copy className="w-5 h-5 text-gray-600" />
-                        )}
-                      </button>
+                  <div className="text-sm sm:text-base text-gray-900 font-mono font-semibold break-all">
+                        👉 Mạng Binance Smart Chain
+                  </div>
+                    <div className="rounded-lg bg-gray-200 p-3 sm:p-4 mt-3 space-y-3">
+                      <div className="flex flex-wrap items-center gap-2 text-sm sm:text-base text-gray-900 font-mono font-semibold break-all">
+                        <span className="flex-1 min-w-0">📌 Địa chỉ ví nhận OFT: 0xc26da070ce179e9da59c7eb9d47ec5705a36371a</span>
+                        <button
+                          type="button"
+                          onClick={() => copyWalletAddress("0xc26da070ce179e9da59c7eb9d47ec5705a36371a")}
+                          className="ml-auto flex-shrink-0 p-2 hover:bg-gray-300 rounded-lg transition-colors"
+                          title="Copy địa chỉ ví"
+                        >
+                          {copiedAddress === "0xc26da070ce179e9da59c7eb9d47ec5705a36371a" ? (
+                            <CheckCircle className="w-5 h-5 text-green-600" />
+                          ) : (
+                            <Copy className="w-5 h-5 text-gray-600" />
+                          )}
+                        </button>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2 text-sm sm:text-base text-gray-900 font-mono font-semibold break-all">
+                        <span className="flex-1 min-w-0">📌 Địa chỉ ví nhận USDT: 0xf41715df29e187d95ca2023ce8193840854e7716</span>
+                        <button
+                          type="button"
+                          onClick={() => copyWalletAddress("0xf41715df29e187d95ca2023ce8193840854e7716")}
+                          className="ml-auto flex-shrink-0 p-2 hover:bg-gray-300 rounded-lg transition-colors"
+                          title="Copy địa chỉ ví"
+                        >
+                          {copiedAddress === "0xf41715df29e187d95ca2023ce8193840854e7716" ? (
+                            <CheckCircle className="w-5 h-5 text-green-600" />
+                          ) : (
+                            <Copy className="w-5 h-5 text-gray-600" />
+                          )}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Upload ảnh */}
-          <div>
-            <label className="block text-gray-700 font-semibold mb-2">
-              <Upload size={18} className="inline mr-2" />
-              Hình ảnh thanh toán <span className="text-red-500">*</span>
-            </label>
-            <div
-              className={`border-2 border-dashed rounded-lg p-4 sm:p-5 md:p-6 text-center ${
-                errors.paymentImage && touched.paymentImage
-                  ? "border-red-300"
-                  : "border-gray-300"
-              }`}
-            >
-              {uploadingImage ? (
-                <div className="flex flex-col items-center gap-2">
-                  <Loader2 className="w-8 h-8 animate-spin text-yellow-500" />
-                  <p className="text-sm text-gray-600">Đang upload hình ảnh...</p>
-                  {imagePreview && (
+            {/* Upload ảnh */}
+            <div>
+              <label className="block text-gray-700 font-semibold mb-2">
+                <Upload size={18} className="inline mr-2" />
+                Hình ảnh thanh toán <span className="text-red-500">*</span>
+              </label>
+              <div
+                className={`border-2 border-dashed rounded-lg p-4 sm:p-5 md:p-6 text-center ${
+                  errors.paymentImage && touched.paymentImage
+                    ? "border-red-300"
+                    : "border-gray-300"
+                }`}
+              >
+                {uploadingImage ? (
+                  <div className="flex flex-col items-center gap-2">
+                    <Loader2 className="w-8 h-8 animate-spin text-yellow-500" />
+                    <p className="text-sm text-gray-600">Đang upload hình ảnh...</p>
+                    {imagePreview && (
+                      <img
+                        src={imagePreview}
+                        alt="Preview"
+                        className="h-32 object-contain rounded opacity-50"
+                      />
+                    )}
+                  </div>
+                ) : formData.paymentImage ? (
+                  <div className="relative inline-block">
                     <img
-                      src={imagePreview}
-                      alt="Preview"
-                      className="h-32 object-contain rounded opacity-50"
+                      src={formData.paymentImage}
+                      alt="Payment"
+                      className="h-32 object-contain rounded"
+                      onError={(e) => {
+                        console.error("Failed to load image:", formData.paymentImage);
+                        e.target.style.display = "none";
+                      }}
                     />
-                  )}
-                </div>
-              ) : formData.paymentImage ? (
-                <div className="relative inline-block">
-                  <img
-                    src={formData.paymentImage}
-                    alt="Payment"
-                    className="h-32 object-contain rounded"
-                    onError={(e) => {
-                      console.error("Failed to load image:", formData.paymentImage);
-                      e.target.style.display = "none";
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      handleChange("paymentImage", null);
-                      setImagePreview(null);
-                    }}
-                    className="block w-full mt-2 text-red-600 text-sm hover:underline"
-                  >
-                    Xóa ảnh
-                  </button>
-                </div>
-              ) : (
-                <label className="cursor-pointer block">
-                  <ImageIcon className="mx-auto h-12 w-12 text-gray-400" />
-                  <span className="text-yellow-600 font-medium">
-                    Tải ảnh lên
-                  </span>
-                  <input
-                    type="file"
-                    className="hidden"
-                    accept="image/*"
-                    onChange={handleImageUpload}
-                  />
-                </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleChange("paymentImage", null);
+                        setImagePreview(null);
+                      }}
+                      className="block w-full mt-2 text-red-600 text-sm hover:underline"
+                    >
+                      Xóa ảnh
+                    </button>
+                  </div>
+                ) : (
+                  <label className="cursor-pointer block">
+                    <ImageIcon className="mx-auto h-12 w-12 text-gray-400" />
+                    <span className="text-yellow-600 font-medium">
+                      Tải ảnh lên
+                    </span>
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                    />
+                  </label>
+                )}
+              </div>
+              {errors.paymentImage && touched.paymentImage && (
+                <p className="text-red-500 text-sm mt-1">{errors.paymentImage}</p>
               )}
             </div>
-            {errors.paymentImage && touched.paymentImage && (
-              <p className="text-red-500 text-sm mt-1">{errors.paymentImage}</p>
-            )}
+
+
+            <button
+              onClick={handleSubmit}
+              disabled={isSubmitting}
+              className="w-full bg-gradient-to-r from-yellow-500 to-yellow-600 text-white font-bold py-3 sm:py-4 rounded-lg hover:opacity-90 transition shadow-lg disabled:opacity-50 text-sm sm:text-base"
+            >
+              {isSubmitting ? "Đang xử lý..." : "ĐĂNG KÝ NGAY"}
+            </button>
           </div>
-
-
-          <button
-            onClick={handleSubmit}
-            disabled={isSubmitting}
-            className="w-full bg-gradient-to-r from-yellow-500 to-yellow-600 text-white font-bold py-3 sm:py-4 rounded-lg hover:opacity-90 transition shadow-lg disabled:opacity-50 text-sm sm:text-base"
-          >
-            {isSubmitting ? "Đang xử lý..." : "ĐĂNG KÝ NGAY"}
-          </button>
         </div>
       </div>
+      )}
     </div>
   );
 };
