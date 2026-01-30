@@ -62,10 +62,10 @@ app.use(bodyParser.urlencoded({ limit: '10mb', extended: true }));
 
 // 2. Kết nối tới MongoDB với database onfa_events
 // Database: onfa_events, Collection: tickets
-const MONGO_URI = "mongodb+srv://onfa_admin:onfa_admin@onfa.tth2epb.mongodb.net/onfa_events?appName=ONFA";
+const MONGO_URI = "mongodb+srv://onfa_admin:onfa_admin@onfa.tth2epb.mongodb.net/onfa_test?appName=ONFA";
 
 mongoose.connect(MONGO_URI, {
-  dbName: 'onfa_events' // Explicitly specify database name
+  dbName: 'onfa_test' // Explicitly specify database name
 })
   .then(() => console.log("✅ Đã kết nối thành công tới MongoDB Cloud - Database: onfa_events"))
   .catch(err => console.error("❌ Lỗi kết nối MongoDB:", err));
@@ -379,35 +379,41 @@ app.post('/api/checkin', async (req, res) => {
     if (!ticket) return res.status(404).json({ message: 'Vé không tồn tại!' });
     if (ticket.status === 'CHECKED_IN') return res.status(400).json({ message: 'Vé đã check-in rồi!' });
 
-    // Don't automatically update status - wait for approve button
-    // Status will be updated when admin clicks "Phê Duyệt" button
-    // No need to save ticket or send webhook here
+    // Immediately update status to CHECKED_IN
+    const updatedTicket = await Ticket.findOneAndUpdate(
+      { id: ticketId },
+      { status: 'CHECKED_IN' },
+      { new: true }
+    );
+
+    // Send webhook to n8n for Google Sheets update
+    try {
+      await n8nWebhookService.notifyStatusChange(updatedTicket, 'update');
+    } catch (webhookError) {
+      console.error('❌ Error sending webhook to n8n:', webhookError);
+      // Don't fail the request if webhook fails
+    }
     
-    // Prepare event data (use current status, not CHECKED_IN)
-    // IMPORTANT: This is just a scan notification, NOT an approval
-    // n8n workflows should NOT update Google Sheets based on this event
-    // Only webhooks from /api/update-status should trigger Google Sheets updates
+    // Prepare event data (with CHECKED_IN status)
     const eventData = {
-      ticketId: ticket.id,
-      name: ticket.name,
-      email: ticket.email,
-      phone: ticket.phone,
-      dob: ticket.dob,
-      tier: ticket.tier,
-      paymentImage: ticket.paymentImage,
-      status: ticket.status, // Keep current status, don't change to CHECKED_IN yet
+      ticketId: updatedTicket.id,
+      name: updatedTicket.name,
+      email: updatedTicket.email,
+      phone: updatedTicket.phone,
+      dob: updatedTicket.dob,
+      tier: updatedTicket.tier,
+      paymentImage: updatedTicket.paymentImage,
+      status: 'CHECKED_IN', // Status is now CHECKED_IN
       checkedInAt: new Date(),
-      isScanOnly: true, // Flag to indicate this is just a scan, not an approval
-      shouldUpdateSheets: false // Explicit flag for n8n workflows
     };
     
     // Send Pusher event to all connected clients
     console.log(`\n📨 ===== CHECK-IN EVENT (Pusher) =====`);
-    console.log(`📨 Ticket ID: ${ticket.id}`);
+    console.log(`📨 Ticket ID: ${updatedTicket.id}`);
     
     try {
       await pusher.trigger(PUSHER_CHANNEL, 'ticket-checked-in', eventData);
-      console.log(`✅ Successfully sent Pusher event to ${PUSHER_CHANNEL}: ticket-checked-in for ${ticket.id}`);
+      console.log(`✅ Successfully sent Pusher event to ${PUSHER_CHANNEL}: ticket-checked-in for ${updatedTicket.id}`);
     } catch (error) {
       console.error(`❌ Error sending Pusher event:`, error);
       console.error(`❌ Make sure Pusher credentials are configured correctly`);
@@ -415,7 +421,7 @@ app.post('/api/checkin', async (req, res) => {
     
     console.log(`📨 ====================================\n`);
     
-    res.json(ticket);
+    res.json(updatedTicket);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -472,9 +478,16 @@ app.post('/api/update-status', async (req, res) => {
     // Send webhook to n8n for status/tier change logging
     // If PAID: append new row, if CHECKED_IN: update existing row
     // Trigger webhook if either status or tier changed
+    // This includes PAID, CHECKED_IN, PENDING, CANCELLED - all status changes
     if (status || tier) {
       const action = status === 'CHECKED_IN' ? 'update' : 'append';
+      console.log(`\n📤 ===== CALLING WEBHOOK FOR STATUS CHANGE =====`);
+      console.log(`📤 Ticket ID: ${ticket.id}`);
+      console.log(`📤 Status: ${status || 'N/A'} (changed)`);
+      console.log(`📤 Tier: ${tier || 'N/A'} (changed)`);
+      console.log(`📤 Action: ${action}`);
       await n8nWebhookService.notifyStatusChange(ticket, action);
+      console.log(`📤 ============================================\n`);
     }
 
     // Nếu status là PAID, tạo QR code và gửi email vé tới client

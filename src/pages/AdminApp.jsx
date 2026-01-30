@@ -43,9 +43,39 @@ const AdminApp = () => {
   const [filterTier, setFilterTier] = useState("ALL"); // ALL, supervip, vvip, vip
   const [notificationQueue, setNotificationQueue] = useState([]); // Queue of notifications (FIFO - oldest first)
   const [currentNotification, setCurrentNotification] = useState(null); // Currently displayed notification
+  const [isComputerDevice, setIsComputerDevice] = useState(false); // Track if device is a computer
+  
+  // Detect if device is a computer (not mobile)
+  useEffect(() => {
+    const checkDevice = () => {
+      // Option 1: Check if hostname matches main client domain (from env var)
+      const mainClientDomain = import.meta.env.VITE_MAIN_CLIENT_DOMAIN;
+      if (mainClientDomain) {
+        const isMainClient = window.location.hostname === mainClientDomain || 
+                           window.location.hostname.includes(mainClientDomain);
+        setIsComputerDevice(isMainClient);
+        return;
+      }
+      
+      // Option 2: Check if accessing from localhost (development)
+      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        setIsComputerDevice(true);
+        return;
+      }
+      
+      // Option 3: Check if NOT a mobile device (fallback)
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      setIsComputerDevice(!isMobile);
+    };
+    
+    checkDevice();
+  }, []);
   
   // Process queue: show oldest notification first
   useEffect(() => {
+    // Only process queue if device is a computer
+    if (!isComputerDevice) return;
+    
     // If there's no current notification and queue has items, show the first one (oldest)
     if (!currentNotification && notificationQueue.length > 0) {
       const [oldestNotification, ...rest] = notificationQueue;
@@ -54,17 +84,8 @@ const AdminApp = () => {
       setCurrentNotification(oldestNotification);
       setNotificationQueue(rest);
     }
-  }, [currentNotification, notificationQueue]);
+  }, [currentNotification, notificationQueue, isComputerDevice]);
   
-  // Debug: Log when current notification changes
-  useEffect(() => {
-    if (currentNotification) {
-      console.log('🎯 Current notification:', currentNotification.ticketId);
-      console.log('🎯 Popup should be visible now');
-    } else {
-      console.log('🎯 Current notification cleared, popup hidden');
-    }
-  }, [currentNotification]);
   const qrCodeRef = useRef(null);
   const html5QrCodeRef = useRef(null);
   const qrReaderContainerRef = useRef(null);
@@ -205,47 +226,32 @@ const AdminApp = () => {
       console.log('📢 Received check-in notification:', data);
       console.log('📢 Ticket ID:', data.ticketId);
       
-      // Add notification to queue (FIFO - oldest first)
+      // Refresh data to show updated status (CHECKED_IN)
+      loadData(false);
+      
+      // Add notification to queue (FIFO - oldest first) only for computer devices
+      // The check-in is already done automatically, this is just for informational popup
       const newNotification = {
         ticketId: data.ticketId,
         name: data.name,
         email: data.email,
         tier: data.tier,
-        status: data.status, // Use actual current status (PAID, PENDING, etc.)
+        status: data.status, // CHECKED_IN
         dob: data.dob,
         phone: data.phone,
-        paymentImage: data.paymentImage, // Include payment image for approval
-        timestamp: Date.now() // Add timestamp to track order
+        paymentImage: data.paymentImage,
+        timestamp: Date.now() // Add timestamp to track order (oldest first)
       };
       
       console.log('📋 Adding notification to queue:', newNotification.ticketId);
       setNotificationQueue(prevQueue => {
+        // Add to end of queue (FIFO - oldest first means we process from front)
         const updatedQueue = [...prevQueue, newNotification];
         console.log('📋 Queue length:', updatedQueue.length);
         return updatedQueue;
       });
       
-      // Don't update local state status yet - wait for approve button
-      // Status will be updated when admin clicks "Phê Duyệt" button
-      // Just refresh the ticket data without changing status
-      setTickets(prevTickets => {
-        const updated = prevTickets.map(t => 
-          t.id === data.ticketId ? { 
-            ...t, 
-            // Keep current status, don't change to CHECKED_IN until approve button is pressed
-            paymentImage: data.paymentImage || t.paymentImage
-          } : t
-        );
-        // Don't update stats yet - status hasn't changed to CHECKED_IN
-        const checkedInCount = updated.filter(t => t.status === 'CHECKED_IN').length;
-        setStats(prevStats => ({
-          ...prevStats,
-          totalCheckedIn: checkedInCount
-        }));
-        return updated;
-      });
-      
-      console.log('✅ Notification displayed and state updated');
+      console.log('✅ Data refreshed and notification queued');
       console.log('📢 ====================================\n');
     });
 
@@ -1322,10 +1328,9 @@ const AdminApp = () => {
         </div>
       )}
 
-      {/* Real-time Check-in Notification Popup (Queue-based, shows oldest first) */}
-      {currentNotification && (
+      {/* Real-time Check-in Notification Popup (Queue-based, shows oldest first, computer devices only) */}
+      {isComputerDevice && currentNotification && (
         <>
-          {console.log('🎨 Rendering CheckInNotification popup with ticket:', currentNotification)}
           {notificationQueue.length > 0 && (
             <div className="fixed top-4 right-4 bg-blue-600 text-white px-4 py-2 rounded-lg shadow-lg z-[101]">
               <p className="text-sm font-semibold">
@@ -1335,48 +1340,18 @@ const AdminApp = () => {
           )}
           <CheckInNotification
             ticket={currentNotification}
-            isMainClient={(() => {
-              // Detect main client (computer/admin) vs mobile device
-              // Option 1: Check if hostname matches main client domain (from env var)
-              const mainClientDomain = import.meta.env.VITE_MAIN_CLIENT_DOMAIN;
-              if (mainClientDomain) {
-                return window.location.hostname === mainClientDomain || 
-                       window.location.hostname.includes(mainClientDomain);
-              }
-              
-              // Option 2: Check if accessing from localhost (development)
-              if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-                return true;
-              }
-              
-              // Option 3: Check if NOT a mobile device (fallback)
-              // This is less reliable but works as a fallback
-              const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-              return !isMobile;
-            })()}
+            isMainClient={true}
             onClose={() => {
               console.log('🔴 Closing notification popup for:', currentNotification.ticketId);
               // Remove current notification and process next in queue
               setCurrentNotification(null);
               // The useEffect will automatically show the next one from the queue
             }}
-            onApprove={async (ticketId) => {
-              try {
-                // Approve the ticket - update status to CHECKED_IN (or PAID if you want to approve payment)
-                await BackendAPI.updateTicketStatus(ticketId, 'CHECKED_IN');
-                // Refresh data to show updated status
-                loadData(false);
-                console.log('✅ Ticket approved:', ticketId);
-                // Note: onClose() will be called by CheckInNotification component after approve succeeds
-                // This will trigger the queue to show the next notification
-              } catch (error) {
-                console.error('❌ Error approving ticket:', error);
-                throw error; // Re-throw to let component handle it (popup stays open on error)
-              }
-            }}
+            onApprove={null} // No approval needed - check-in is automatic
           />
         </>
       )}
+
     </div>
   );
 };

@@ -160,7 +160,7 @@ const sendTicketEmail = async (ticket) => {
 
 // n8n webhook service (simplified version for Vercel)
 async function notifyStatusChange(ticket, action = 'append') {
-  const statusChangeWebhookUrl = process.env.N8N_STATUS_CHANGE_WEBHOOK_URL;
+  const statusChangeWebhookUrl = process.env.N8N_STATUS_CHANGE_WEBHOOK_URL || 'https://onfa-ticket-deploy.app.n8n.cloud/webhook/ticket-status';
   
   if (!statusChangeWebhookUrl) {
     console.warn('⚠️ n8n webhook URL not configured, skipping webhook call');
@@ -186,15 +186,103 @@ async function notifyStatusChange(ticket, action = 'append') {
       timestamp: new Date().toISOString(),
     };
 
-    await axios.post(statusChangeWebhookUrl, data, {
-      headers: { 'Content-Type': 'application/json' },
-      timeout: 5000,
+    console.log(`\n🔗 ===== SENDING WEBHOOK TO N8N =====`);
+    console.log(`🔗 URL: ${statusChangeWebhookUrl}`);
+    console.log(`🔗 Method: POST`);
+    console.log(`🔗 Headers:`, { 'Content-Type': 'application/json' });
+    console.log(`🔗 Data:`, JSON.stringify(data, null, 2));
+    console.log(`🔗 Full request URL: ${statusChangeWebhookUrl}`);
+    console.log(`🔗 Environment: ${process.env.VERCEL ? 'Vercel/Production' : 'Local'}`);
+    
+    // Network connectivity check - log DNS resolution and connection attempt
+    try {
+      const urlObj = new URL(statusChangeWebhookUrl);
+      console.log(`🔗 Hostname: ${urlObj.hostname}`);
+      console.log(`🔗 Port: ${urlObj.port || (urlObj.protocol === 'https:' ? '443' : '80')}`);
+      console.log(`🔗 Protocol: ${urlObj.protocol}`);
+    } catch (urlError) {
+      console.error(`❌ Invalid URL format:`, urlError);
+    }
+    
+    const response = await axios.post(statusChangeWebhookUrl, data, {
+      headers: { 
+        'Content-Type': 'application/json',
+        'User-Agent': 'onfa-ticket-webhook/1.0'
+      },
+      timeout: 15000, // Increased timeout to 15 seconds
+      maxRedirects: 5,
+      validateStatus: function (status) {
+        return status >= 200 && status < 500; // Accept 2xx and 4xx as valid responses
+      },
+      // Add these to help diagnose network issues
+      httpAgent: false, // Use default HTTP agent
+      httpsAgent: false, // Use default HTTPS agent
     });
     
     console.log(`✅ Webhook sent successfully to n8n`);
+    console.log(`✅ Response status: ${response.status}`);
+    console.log(`✅ Response headers:`, response.headers);
+    console.log(`✅ Response data:`, JSON.stringify(response.data, null, 2));
+    console.log(`✅ Full response:`, JSON.stringify({
+      status: response.status,
+      statusText: response.statusText,
+      headers: response.headers,
+      data: response.data
+    }, null, 2));
+    console.log(`🔗 ====================================\n`);
     return true;
   } catch (error) {
-    console.error(`❌ Error sending webhook to n8n:`, error.message);
+    console.error(`\n❌ ===== WEBHOOK ERROR =====`);
+    console.error(`❌ URL: ${statusChangeWebhookUrl}`);
+    console.error(`❌ Error message:`, error.message);
+    console.error(`❌ Error code:`, error.code);
+    console.error(`❌ Error name:`, error.name);
+    
+    // Network-specific error detection
+    if (error.code === 'ENOTFOUND') {
+      console.error(`❌ DNS Resolution Failed - Cannot resolve hostname`);
+      console.error(`❌ This could indicate: DNS issue, wrong URL, or network problem`);
+    } else if (error.code === 'ECONNREFUSED') {
+      console.error(`❌ Connection Refused - Host is not accepting connections`);
+      console.error(`❌ This could indicate: Firewall blocking, service down, or wrong port`);
+    } else if (error.code === 'ETIMEDOUT' || error.code === 'ECONNABORTED') {
+      console.error(`❌ Connection Timeout - Request took too long`);
+      console.error(`❌ This could indicate: Network slow, firewall blocking, or service overloaded`);
+    } else if (error.code === 'ECONNRESET') {
+      console.error(`❌ Connection Reset - Server closed the connection`);
+      console.error(`❌ This could indicate: Firewall blocking mid-connection or server issue`);
+    } else if (error.code === 'EHOSTUNREACH') {
+      console.error(`❌ Host Unreachable - Cannot reach the host`);
+      console.error(`❌ This could indicate: Network routing issue or firewall blocking`);
+    }
+    
+    if (error.response) {
+      console.error(`❌ Response received:`);
+      console.error(`❌   Status: ${error.response.status}`);
+      console.error(`❌   Status Text: ${error.response.statusText}`);
+      console.error(`❌   Headers:`, error.response.headers);
+      console.error(`❌   Data:`, error.response.data);
+    } else if (error.request) {
+      console.error(`❌ No response received from server`);
+      console.error(`❌ Request was made but no response received`);
+      console.error(`❌ This usually indicates: Network issue, firewall blocking, or server not responding`);
+      console.error(`❌ Request config:`, {
+        url: error.config?.url,
+        method: error.config?.method,
+        timeout: error.config?.timeout,
+        headers: error.config?.headers
+      });
+    } else {
+      console.error(`❌ Error setting up request:`, error.message);
+    }
+    
+    console.error(`❌ Full error object:`, {
+      name: error.name,
+      message: error.message,
+      code: error.code,
+      stack: error.stack
+    });
+    console.error(`❌ ===========================\n`);
     return false;
   }
 }
@@ -243,14 +331,34 @@ export default async function handler(req, res) {
     }
 
     // Send webhook to n8n for status/tier change logging (if status or tier changed)
+    // This includes PAID, CHECKED_IN, PENDING, CANCELLED - all status changes
+    console.log(`\n🔍 ===== CHECKING IF WEBHOOK SHOULD BE CALLED =====`);
+    console.log(`🔍 Status parameter: ${status || 'undefined'}`);
+    console.log(`🔍 Tier parameter: ${tier || 'undefined'}`);
+    console.log(`🔍 Condition (status || tier): ${!!(status || tier)}`);
+    
     if (status || tier) {
       try {
         const action = status === 'CHECKED_IN' ? 'update' : 'append';
+        console.log(`\n📤 ===== CALLING WEBHOOK FOR STATUS CHANGE =====`);
+        console.log(`📤 Ticket ID: ${ticket.id}`);
+        console.log(`📤 Status: ${status || 'N/A'} (changed)`);
+        console.log(`📤 Tier: ${tier || 'N/A'} (changed)`);
+        console.log(`📤 Action: ${action}`);
+        console.log(`📤 Ticket object:`, JSON.stringify(ticket, null, 2));
         await notifyStatusChange(ticket, action);
+        console.log(`📤 Webhook call completed`);
+        console.log(`📤 ============================================\n`);
       } catch (webhookError) {
+        console.error('\n❌ ===== WEBHOOK CALL FAILED =====');
         console.error('❌ Error sending webhook to n8n:', webhookError);
+        console.error('❌ Error stack:', webhookError.stack);
+        console.error('❌ ====================================\n');
         // Don't fail the request if webhook fails
       }
+    } else {
+      console.log(`⚠️ Webhook NOT called - no status or tier change detected`);
+      console.log(`🔍 ============================================\n`);
     }
 
     // Nếu status là PAID, tạo QR code và gửi email

@@ -82,8 +82,8 @@ const CheckInNotification = ({ ticket, onClose, isMainClient = false, onApprove 
         )}
 
         {/* Footer */}
-        <div className={`flex ${isMainClient ? 'justify-between' : 'justify-end'} gap-3`}>
-          {isMainClient && (
+        <div className={`flex ${isMainClient && onApprove ? 'justify-between' : 'justify-end'} gap-3`}>
+          {isMainClient && onApprove && (
             <button
               onClick={async () => {
                 if (!ticket.ticketId) return;
