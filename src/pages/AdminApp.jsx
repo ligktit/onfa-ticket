@@ -393,12 +393,20 @@ const AdminApp = () => {
 
       console.log("📷 Starting camera with ID:", cameraId || "environment");
       
+      // Calculate QR box size based on screen size (use 70% of smaller dimension)
+      const qrBoxSize = Math.min(window.innerWidth, window.innerHeight) * 0.7;
+      
       await html5QrCode.start(
         cameraId || { facingMode: "environment" },
         {
           fps: 10,
-          qrbox: { width: 250, height: 250 },
+          qrbox: { width: qrBoxSize, height: qrBoxSize },
           aspectRatio: 1.0,
+          videoConstraints: {
+            facingMode: "environment",
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
         },
         (decodedText) => {
           // QR code scanned successfully
@@ -956,44 +964,6 @@ const AdminApp = () => {
                 </div>
               )}
 
-              {/* QR Scanner - Camera view */}
-              {/* Container must exist before starting scanner, so render it when isScanning is true */}
-              {isScanning && (
-                <div className="mb-4 sm:mb-6">
-                  <div className="bg-black rounded-lg p-2 sm:p-4 mb-3 sm:mb-4 relative overflow-hidden">
-                    {/* Loading indicator - shown outside container while scanner is initializing */}
-                    {!html5QrCodeRef.current && (
-                      <div className="w-full min-h-[300px] flex items-center justify-center bg-black rounded">
-                        <div className="text-white text-center">
-                          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2" />
-                          <p className="text-sm">Đang khởi động camera...</p>
-                        </div>
-                      </div>
-                    )}
-                    {/* QR Scanner container - Html5Qrcode will render video here */}
-                    {/* Keep container empty - Html5Qrcode will add its own elements */}
-                    {/* Always render container, Html5Qrcode will populate it */}
-                    <div 
-                      ref={qrReaderContainerRef}
-                      id="qr-reader" 
-                      className="w-full"
-                      style={{ 
-                        minHeight: '300px',
-                        position: 'relative',
-                        backgroundColor: '#000'
-                      }}
-                    ></div>
-                    {html5QrCodeRef.current && (
-                      <button
-                        onClick={stopQRScanner}
-                        className="absolute top-1 right-1 sm:top-2 sm:right-2 bg-red-500 text-white px-2 sm:px-4 py-1 sm:py-2 rounded hover:bg-red-600 text-xs sm:text-sm z-20 shadow-lg"
-                      >
-                        Đóng
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
               {/* Hidden container for file scanning (always present, even when camera not active) */}
               {!isScanning && <div id="qr-reader-file" className="hidden w-0 h-0"></div>}
 
@@ -1323,6 +1293,60 @@ const AdminApp = () => {
               >
                 Đóng
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Full-screen QR Scanner Camera Popup */}
+      {isScanning && (
+        <div className="fixed inset-0 bg-black z-[200] flex flex-col items-center justify-center">
+          {/* Header Bar */}
+          <div className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/90 to-transparent z-30 p-4 flex items-center justify-between">
+            <h2 className="text-white text-xl font-bold">Quét QR Code</h2>
+            <button
+              onClick={stopQRScanner}
+              className="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg font-semibold transition-colors flex items-center gap-2 shadow-lg"
+            >
+              <span>Đóng</span>
+            </button>
+          </div>
+
+          {/* Camera Container - Full Screen */}
+          <div className="w-full h-full relative flex items-center justify-center">
+            {/* Loading indicator - shown while scanner is initializing */}
+            {!html5QrCodeRef.current && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black z-10">
+                <div className="text-white text-center">
+                  <Loader2 className="w-16 h-16 animate-spin mx-auto mb-4" />
+                  <p className="text-lg font-semibold">Đang khởi động camera...</p>
+                  <p className="text-sm text-gray-400 mt-2">Vui lòng cho phép truy cập camera</p>
+                </div>
+              </div>
+            )}
+            
+            {/* QR Scanner container - Html5Qrcode will render video here */}
+            <div 
+              ref={qrReaderContainerRef}
+              id="qr-reader" 
+              className="w-full h-full absolute inset-0"
+              style={{ 
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                backgroundColor: '#000',
+                zIndex: 1
+              }}
+            ></div>
+          </div>
+
+          {/* Instructions Bar */}
+          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/70 to-transparent z-30 p-4 pb-8">
+            <div className="text-center text-white">
+              <p className="text-sm font-medium mb-1">Đưa QR code vào khung hình vuông</p>
+              <p className="text-xs text-gray-400">Camera sẽ tự động quét mã QR</p>
             </div>
           </div>
         </div>
