@@ -286,31 +286,6 @@ const AdminApp = () => {
     setFilteredTickets(tickets);
   }, [tickets]);
 
-  // Prevent body scroll when camera is open (mobile optimization)
-  useEffect(() => {
-    if (isScanning) {
-      // Prevent body scroll on mobile
-      document.body.style.overflow = 'hidden';
-      document.body.style.position = 'fixed';
-      document.body.style.width = '100%';
-      document.body.style.height = '100%';
-    } else {
-      // Restore body scroll
-      document.body.style.overflow = '';
-      document.body.style.position = '';
-      document.body.style.width = '';
-      document.body.style.height = '';
-    }
-    
-    return () => {
-      // Cleanup: restore body scroll
-      document.body.style.overflow = '';
-      document.body.style.position = '';
-      document.body.style.width = '';
-      document.body.style.height = '';
-    };
-  }, [isScanning]);
-
   // Cleanup QR scanner when view changes or component unmounts
   useEffect(() => {
     return () => {
@@ -328,27 +303,16 @@ const AdminApp = () => {
       setError("");
       setIsScanning(true);
       
-      // Wait for React to render the full-screen popup first
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
       // Ensure container exists before starting
       const containerId = "qr-reader";
-      
-      // Wait for container to be rendered (full-screen popup needs more time)
-      let container = null;
-      let attempts = 0;
-      const maxAttempts = 20; // Wait up to 2 seconds
-      
-      while (!container && attempts < maxAttempts) {
+      let container = qrReaderContainerRef.current || document.getElementById(containerId);
+      if (!container) {
+        // Container doesn't exist yet, wait a bit for React to render
+        await new Promise(resolve => setTimeout(resolve, 200));
         container = qrReaderContainerRef.current || document.getElementById(containerId);
         if (!container) {
-          await new Promise(resolve => setTimeout(resolve, 100));
-          attempts++;
+          throw new Error("Container element không tồn tại. Vui lòng thử lại.");
         }
-      }
-      
-      if (!container) {
-        throw new Error("Container element không tồn tại. Vui lòng thử lại.");
       }
       
       // Clear any existing content in container (React might have added something)
@@ -387,43 +351,29 @@ const AdminApp = () => {
       
       console.log("📷 Starting QR scanner...");
       
-      // Wait a bit more to ensure container is fully rendered and has dimensions
-      await new Promise(resolve => setTimeout(resolve, 200));
+      // Wait a bit to ensure container is fully rendered by React
+      await new Promise(resolve => setTimeout(resolve, 300));
       
       // Verify container exists and has dimensions
-      container = qrReaderContainerRef.current || document.getElementById(containerId);
+      container = document.getElementById(containerId);
       if (!container) {
         throw new Error("Container element không tồn tại sau khi render.");
       }
       
-      // Ensure container has proper dimensions (full screen)
-      // Use viewport dimensions for mobile compatibility
-      const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
-      const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+      // Ensure container has proper dimensions
+      const containerWidth = container.offsetWidth || container.clientWidth;
+      const containerHeight = container.offsetHeight || container.clientHeight;
       
-      let containerWidth = container.offsetWidth || container.clientWidth || viewportWidth;
-      let containerHeight = container.offsetHeight || container.clientHeight || viewportHeight;
-      
-      // For mobile, use viewport dimensions directly
-      // Mobile browsers sometimes report incorrect offsetWidth/offsetHeight
-      if (containerWidth === 0 || containerHeight === 0 || containerWidth < 100 || containerHeight < 100) {
-        console.warn("Container has zero/small dimensions, using viewport size...");
-        containerWidth = viewportWidth;
-        containerHeight = viewportHeight;
-        // Set explicit dimensions for mobile
-        container.style.width = `${containerWidth}px`;
-        container.style.height = `${containerHeight}px`;
-        container.style.position = 'absolute';
-        container.style.top = '0';
-        container.style.left = '0';
-        container.style.right = '0';
-        container.style.bottom = '0';
+      if (containerWidth === 0 || containerHeight === 0) {
+        console.warn("Container has zero dimensions, waiting longer...");
+        await new Promise(resolve => setTimeout(resolve, 500));
+        // Check again
+        if (container.offsetWidth === 0 || container.offsetHeight === 0) {
+          throw new Error("Container không có kích thước. Vui lòng thử lại.");
+        }
       }
       
       console.log(`📷 Container dimensions: ${containerWidth}x${containerHeight}`);
-      console.log(`📷 Viewport dimensions: ${viewportWidth}x${viewportHeight}`);
-      console.log(`📷 Screen dimensions: ${screen.width}x${screen.height}`);
-      console.log(`📷 Device type: ${/Mobile|Android|iPhone|iPad/i.test(navigator.userAgent) ? 'Mobile' : 'Desktop'}`);
       
       const html5QrCode = new Html5Qrcode(containerId);
 
@@ -443,23 +393,12 @@ const AdminApp = () => {
 
       console.log("📷 Starting camera with ID:", cameraId || "environment");
       
-      // Calculate QR box size based on screen size (use 70% of smaller dimension)
-      const qrBoxSize = Math.min(containerWidth, containerHeight) * 0.7;
-      
-      console.log(`📷 QR box size: ${qrBoxSize}x${qrBoxSize}`);
-      console.log(`📷 Starting camera with container: ${containerWidth}x${containerHeight}`);
-      
       await html5QrCode.start(
         cameraId || { facingMode: "environment" },
         {
           fps: 10,
-          qrbox: { width: qrBoxSize, height: qrBoxSize },
+          qrbox: { width: 250, height: 250 },
           aspectRatio: 1.0,
-          videoConstraints: {
-            facingMode: "environment",
-            width: { ideal: Math.min(1280, containerWidth) },
-            height: { ideal: Math.min(720, containerHeight) }
-          }
         },
         (decodedText) => {
           // QR code scanned successfully
@@ -480,30 +419,20 @@ const AdminApp = () => {
       // Only set ref after scanner successfully starts
       html5QrCodeRef.current = html5QrCode;
       
-      console.log("✅ Camera started successfully!");
-      
       // Force React to update to hide loading indicator and show video
       // Use setTimeout to ensure video is rendered first
       setTimeout(() => {
-        console.log("✅ Checking video element...");
+        console.log("✅ Camera started successfully - video should be visible now");
         // Check if video element exists
         const video = container.querySelector('video');
         if (video) {
           console.log("✅ Video element found:", video.videoWidth, "x", video.videoHeight);
-          console.log("✅ Video is playing:", !video.paused);
         } else {
           console.warn("⚠️ Video element not found in container");
-          console.warn("⚠️ Container HTML:", container.innerHTML.substring(0, 200));
         }
       }, 500);
     } catch (err) {
       console.error("❌ Camera error:", err);
-      console.error("❌ Error details:", {
-        name: err.name,
-        message: err.message,
-        stack: err.stack
-      });
-      
       let errorMsg = "Không thể khởi động camera. ";
       
       const errName = err.name || "";
@@ -521,13 +450,8 @@ const AdminApp = () => {
                    "3. Thử lại";
       } else if (errName === "NotReadableError" || errMessage.includes("NotReadable")) {
         errorMsg = "⚠️ Camera đang được sử dụng bởi ứng dụng khác. Vui lòng đóng các ứng dụng khác và thử lại.";
-      } else if (errMessage.includes("Container") || errMessage.includes("container")) {
-        errorMsg = "Lỗi hệ thống: Container không tồn tại hoặc chưa được render. Vui lòng thử lại.";
-        console.error("❌ Container issue - checking DOM:", {
-          refExists: !!qrReaderContainerRef.current,
-          elementExists: !!document.getElementById("qr-reader"),
-          isScanning: isScanning
-        });
+      } else if (errMessage.includes("Container")) {
+        errorMsg = "Lỗi hệ thống: Container không tồn tại. Vui lòng tải lại trang.";
       } else if (errMessage) {
         errorMsg += errMessage;
       } else {
@@ -1032,6 +956,44 @@ const AdminApp = () => {
                 </div>
               )}
 
+              {/* QR Scanner - Camera view */}
+              {/* Container must exist before starting scanner, so render it when isScanning is true */}
+              {isScanning && (
+                <div className="mb-4 sm:mb-6">
+                  <div className="bg-black rounded-lg p-2 sm:p-4 mb-3 sm:mb-4 relative overflow-hidden">
+                    {/* Loading indicator - shown outside container while scanner is initializing */}
+                    {!html5QrCodeRef.current && (
+                      <div className="w-full min-h-[300px] flex items-center justify-center bg-black rounded">
+                        <div className="text-white text-center">
+                          <Loader2 className="w-8 h-8 animate-spin mx-auto mb-2" />
+                          <p className="text-sm">Đang khởi động camera...</p>
+                        </div>
+                      </div>
+                    )}
+                    {/* QR Scanner container - Html5Qrcode will render video here */}
+                    {/* Keep container empty - Html5Qrcode will add its own elements */}
+                    {/* Always render container, Html5Qrcode will populate it */}
+                    <div 
+                      ref={qrReaderContainerRef}
+                      id="qr-reader" 
+                      className="w-full"
+                      style={{ 
+                        minHeight: '300px',
+                        position: 'relative',
+                        backgroundColor: '#000'
+                      }}
+                    ></div>
+                    {html5QrCodeRef.current && (
+                      <button
+                        onClick={stopQRScanner}
+                        className="absolute top-1 right-1 sm:top-2 sm:right-2 bg-red-500 text-white px-2 sm:px-4 py-1 sm:py-2 rounded hover:bg-red-600 text-xs sm:text-sm z-20 shadow-lg"
+                      >
+                        Đóng
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
               {/* Hidden container for file scanning (always present, even when camera not active) */}
               {!isScanning && <div id="qr-reader-file" className="hidden w-0 h-0"></div>}
 
@@ -1361,119 +1323,6 @@ const AdminApp = () => {
               >
                 Đóng
               </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Full-screen QR Scanner Camera Popup - Mobile Optimized */}
-      {isScanning && (
-        <div 
-          className="fixed inset-0 bg-black z-[200] flex flex-col items-center justify-center"
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            width: '100vw',
-            height: '100vh',
-            minHeight: '-webkit-fill-available', // iOS Safari fix
-            WebkitOverflowScrolling: 'touch'
-          }}
-        >
-          {/* Header Bar - Mobile Optimized */}
-          <div 
-            className="absolute top-0 left-0 right-0 bg-gradient-to-b from-black/95 to-transparent z-30 p-3 sm:p-4 flex items-center justify-between"
-            style={{
-              paddingTop: 'max(12px, env(safe-area-inset-top))', // iOS notch support
-            }}
-          >
-            <h2 className="text-white text-lg sm:text-xl font-bold">Quét QR Code</h2>
-            <button
-              onClick={stopQRScanner}
-              className="bg-red-500 active:bg-red-600 text-white px-4 py-2 rounded-lg font-semibold transition-colors flex items-center gap-2 shadow-lg touch-manipulation"
-              style={{ WebkitTapHighlightColor: 'transparent' }}
-            >
-              <span className="text-sm sm:text-base">Đóng</span>
-            </button>
-          </div>
-
-          {/* Camera Container - Full Screen - Mobile Optimized */}
-          <div 
-            className="w-full h-full relative flex items-center justify-center"
-            style={{ 
-              width: '100vw',
-              height: '100vh',
-              minHeight: '-webkit-fill-available', // iOS Safari fix
-              position: 'relative'
-            }}
-          >
-            {/* Loading indicator - shown while scanner is initializing */}
-            {!html5QrCodeRef.current && !error && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black z-10">
-                <div className="text-white text-center px-4">
-                  <Loader2 className="w-12 h-12 sm:w-16 sm:h-16 animate-spin mx-auto mb-4" />
-                  <p className="text-base sm:text-lg font-semibold">Đang khởi động camera...</p>
-                  <p className="text-xs sm:text-sm text-gray-400 mt-2">Vui lòng cho phép truy cập camera</p>
-                </div>
-              </div>
-            )}
-            
-            {/* Error message */}
-            {error && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black z-10 px-4">
-                <div className="text-white text-center max-w-md">
-                  <AlertCircle className="w-12 h-12 sm:w-16 sm:h-16 mx-auto mb-4 text-red-500" />
-                  <p className="text-base sm:text-lg font-semibold mb-2 text-red-400">Lỗi khởi động camera</p>
-                  <p className="text-xs sm:text-sm text-gray-300 whitespace-pre-line">{error}</p>
-                  <button
-                    onClick={() => {
-                      setError("");
-                      setIsScanning(false);
-                    }}
-                    className="mt-4 bg-red-500 active:bg-red-600 text-white px-6 py-2 rounded-lg font-semibold transition-colors touch-manipulation"
-                    style={{ WebkitTapHighlightColor: 'transparent' }}
-                  >
-                    Đóng
-                  </button>
-                </div>
-              </div>
-            )}
-            
-            {/* QR Scanner container - Html5Qrcode will render video here */}
-            <div 
-              ref={qrReaderContainerRef}
-              id="qr-reader" 
-              className="absolute inset-0"
-              style={{ 
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                width: '100%',
-                height: '100%',
-                minWidth: '100vw',
-                minHeight: '100vh',
-                minHeight: '-webkit-fill-available', // iOS Safari fix
-                backgroundColor: '#000',
-                zIndex: 1,
-                overflow: 'hidden'
-              }}
-            ></div>
-          </div>
-
-          {/* Instructions Bar - Mobile Optimized */}
-          <div 
-            className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/95 via-black/80 to-transparent z-30 p-4 pb-6 sm:pb-8"
-            style={{
-              paddingBottom: 'max(24px, calc(env(safe-area-inset-bottom) + 24px))', // iOS home indicator support
-            }}
-          >
-            <div className="text-center text-white">
-              <p className="text-xs sm:text-sm font-medium mb-1">Đưa QR code vào khung hình vuông</p>
-              <p className="text-xs text-gray-400">Camera sẽ tự động quét mã QR</p>
             </div>
           </div>
         </div>
